@@ -1,0 +1,7 @@
+{
+  "package_name": "my_interfaces",
+  "output_dir": "/home/huynn/ros2_ws/src/build/my_interfaces/rosidl_generator_type_description/my_interfaces",
+  "idl_tuples": [
+    "/home/huynn/ros2_ws/src/build/my_interfaces/rosidl_adapter/my_interfaces:msg/MyMsg.idl"
+  ]
+}

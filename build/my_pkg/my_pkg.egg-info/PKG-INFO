@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: my-pkg
+Version: 0.0.0
+Summary: TODO: example for publish and subcribe msg 
+Maintainer: huynn
+Maintainer-email: huypro26122004@gmail.com
+License: Apache-2.0
+Provides-Extra: test
+License-File: LICENSE

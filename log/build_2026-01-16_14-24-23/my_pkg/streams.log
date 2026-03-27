@@ -1,0 +1,23 @@
+[0.445s] Invoking command in '/home/huynn/ros2_ws/src/my_pkg': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/huynn/ros2_ws/build/my_pkg/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/huynn/ros2_ws/install/my_pkg/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/my_pkg build --build-base /home/huynn/ros2_ws/build/my_pkg/build install --record /home/huynn/ros2_ws/build/my_pkg/install.log --single-version-externally-managed install_data
+[0.585s] running egg_info
+[0.594s] writing ../../build/my_pkg/my_pkg.egg-info/PKG-INFO
+[0.594s] writing dependency_links to ../../build/my_pkg/my_pkg.egg-info/dependency_links.txt
+[0.594s] writing entry points to ../../build/my_pkg/my_pkg.egg-info/entry_points.txt
+[0.595s] writing requirements to ../../build/my_pkg/my_pkg.egg-info/requires.txt
+[0.595s] writing top-level names to ../../build/my_pkg/my_pkg.egg-info/top_level.txt
+[0.616s] reading manifest file '../../build/my_pkg/my_pkg.egg-info/SOURCES.txt'
+[0.616s] adding license file 'LICENSE'
+[0.616s] writing manifest file '../../build/my_pkg/my_pkg.egg-info/SOURCES.txt'
+[0.616s] running build
+[0.616s] running build_py
+[0.617s] running install
+[0.620s] running install_lib
+[0.630s] running install_data
+[0.630s] running install_egg_info
+[0.639s] removing '/home/huynn/ros2_ws/install/my_pkg/lib/python3.12/site-packages/my_pkg-0.0.0-py3.12.egg-info' (and everything under it)
+[0.640s] Copying ../../build/my_pkg/my_pkg.egg-info to /home/huynn/ros2_ws/install/my_pkg/lib/python3.12/site-packages/my_pkg-0.0.0-py3.12.egg-info
+[0.640s] running install_scripts
+[0.716s] Installing listener script to /home/huynn/ros2_ws/install/my_pkg/lib/my_pkg
+[0.716s] Installing talker script to /home/huynn/ros2_ws/install/my_pkg/lib/my_pkg
+[0.717s] writing list of installed files to '/home/huynn/ros2_ws/build/my_pkg/install.log'
+[0.738s] Invoked command in '/home/huynn/ros2_ws/src/my_pkg' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/huynn/ros2_ws/build/my_pkg/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/huynn/ros2_ws/install/my_pkg/lib/python3.12/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/my_pkg build --build-base /home/huynn/ros2_ws/build/my_pkg/build install --record /home/huynn/ros2_ws/build/my_pkg/install.log --single-version-externally-managed install_data
