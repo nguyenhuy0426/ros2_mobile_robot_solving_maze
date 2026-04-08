@@ -541,7 +541,7 @@
       </link>
     </model>
 
-    <!-- Start: original (3.25,-4.25) rotated -> (4.25,-3.25) -->
-    <!-- Goal: original (3.25,-2.25) rotated -> (2.25,-3.25) -->
+    <!-- Start: original (3.25,-2.25) rotated -> (2.25,-3.25) -->
+    <!-- Goal: original (3.25,-4.25) rotated -> (4.25,-3.25) -->
 </world>
 </sdf>

@@ -1,0 +1,503 @@
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 20:37:59
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+[20:44:31] Gen    0 | 387.6s | best=-253.6 mean=50.4 std=125.7 stag=0
+  outcomes: goal=0 col=2 oob=3 timeout=15
+  best_genome: cells=7 steps=200 dist=1.99m 
+[20:50:00] Gen    1 | 329.4s | best=-238.8 mean=31.3 std=114.5 stag=1
+  outcomes: goal=0 col=8 oob=2 timeout=10
+  best_genome: cells=7 steps=200 dist=1.98m 
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 20:54:47
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+[21:01:43] Gen    0 | 412.0s | best=-194.5 mean=40.6 std=103.1 stag=0
+  outcomes: goal=0 col=5 oob=0 timeout=15
+  best_genome: cells=6 steps=200 dist=1.49m 
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 21:03:35
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+[21:10:19] Gen    0 | 399.9s | best=-268.7 mean=74.6 std=105.6 stag=0
+  outcomes: goal=0 col=5 oob=3 timeout=12
+  best_genome: cells=3 steps=200 dist=1.89m 
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 21:15:37
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 21:18:11
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+[21:23:24] Gen    0 | 309.2s | best=-287.5 mean=57.6 std=116.5 stag=0
+  outcomes: goal=0 col=14 oob=3 timeout=3
+  best_genome: cells=9 steps=200 dist=2.41m 
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 21:26:54
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+[21:34:19] Gen    0 | 441.7s | best=-3.3 mean=148.8 std=35.0 stag=0
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=3 steps=200 dist=1.91m 
+[21:41:40] Gen    1 | 440.8s | best=157.5 mean=157.5 std=0.0 stag=1
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=2 steps=200 dist=1.95m 
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 22:02:38
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 22:04:52
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+[22:12:14] Gen    0 | 438.0s | best=-221.0 mean=-46.3 std=177.9 stag=0
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=1 steps=200 dist=1.99m 
+[22:19:34] Gen    1 | 440.1s | best=159.0 mean=159.0 std=0.0 stag=1
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=2 steps=200 dist=2.39m 
+[22:26:54] Gen    2 | 440.3s | best=159.0 mean=159.0 std=0.0 stag=2
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=2 steps=200 dist=2.39m 
+
+════════════════════════════════════════════════════════════
+Session 2026-04-07 22:31:47
+  MODE=sequential+physics  POP=20  N_W=1140  STEPS=200
+  START_Z=0.024m (=WHEEL_R) TELE_WAIT=2.0s PARK_Z=-10.0m
+  ELIM=0.08m  STOP=0.13m  SLOW=0.2m
+  R_CELL=20.0  R_DIST=30.0  R_GOAL=2000.0
+════════════════════════════════════════════════════════════
+[22:41:23] Gen    0 | 571.5s | best=-279.0 mean=28.9 std=141.8 stag=0
+  outcomes: goal=0 col=3 oob=2 timeout=15
+  best_genome: cells=3 steps=200 dist=2.33m 
+[22:48:31] Gen    1 | 428.8s | best=-358.0 mean=10.5 std=158.6 stag=0
+  outcomes: goal=0 col=2 oob=3 timeout=15
+  best_genome: cells=6 steps=200 dist=2.32m 
+[22:56:20] Gen    2 | 469.0s | best=-351.0 mean=-50.9 std=178.1 stag=1
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=5 steps=200 dist=2.04m 
+[23:04:00] Gen    3 | 459.7s | best=-322.1 mean=-7.0 std=161.8 stag=2
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=4 steps=200 dist=1.44m 
+[23:12:10] Gen    4 | 489.7s | best=-304.6 mean=-10.7 std=167.3 stag=3
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=1 steps=200 dist=1.95m 
+[23:20:46] Gen    5 | 516.1s | best=-321.0 mean=11.3 std=117.6 stag=4
+  outcomes: goal=0 col=4 oob=1 timeout=15
+  best_genome: cells=1 steps=200 dist=1.93m 
+[23:28:47] Gen    6 | 481.4s | best=-301.4 mean=-48.9 std=177.6 stag=5
+  outcomes: goal=0 col=1 oob=2 timeout=17
+  best_genome: cells=1 steps=200 dist=1.96m 
+[23:36:41] Gen    7 | 473.5s | best=-343.3 mean=-65.3 std=201.4 stag=6
+  outcomes: goal=0 col=1 oob=3 timeout=16
+  best_genome: cells=2 steps=200 dist=1.73m 
+[23:44:44] Gen    8 | 483.1s | best=-316.4 mean=-30.9 std=175.8 stag=7
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=4 steps=200 dist=1.58m 
+[23:52:20] Gen    9 | 455.4s | best=-320.9 mean=-14.6 std=144.2 stag=8
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: cells=2 steps=200 dist=1.76m 
+[23:59:46] Gen   10 | 446.2s | best=-425.7 mean=-61.9 std=169.6 stag=0
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=8 steps=200 dist=2.05m 
+[00:06:46] Gen   11 | 419.7s | best=-381.8 mean=-4.9 std=154.5 stag=1
+  outcomes: goal=0 col=2 oob=2 timeout=16
+  best_genome: cells=6 steps=200 dist=2.00m 
+[00:14:43] Gen   12 | 477.5s | best=-390.6 mean=-52.1 std=187.4 stag=2
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=6 steps=200 dist=1.98m 
+[00:22:46] Gen   13 | 483.2s | best=-411.0 mean=-97.0 std=170.5 stag=3
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=7 steps=200 dist=2.06m 
+[00:30:10] Gen   14 | 444.2s | best=-391.7 mean=-7.7 std=150.0 stag=4
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=5 steps=200 dist=1.62m 
+[00:38:10] Gen   15 | 479.8s | best=-285.4 mean=33.7 std=130.6 stag=5
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=8 steps=158 dist=2.05m 
+[00:45:24] Gen   16 | 433.3s | best=-411.3 mean=2.7 std=151.2 stag=6
+  outcomes: goal=0 col=1 oob=2 timeout=17
+  best_genome: cells=7 steps=200 dist=2.00m 
+[00:53:08] Gen   17 | 463.9s | best=-350.8 mean=-42.3 std=174.7 stag=7
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=5 steps=200 dist=1.88m 
+[01:00:53] Gen   18 | 465.8s | best=-349.8 mean=11.4 std=157.3 stag=8
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=5 steps=200 dist=1.87m 
+[01:08:38] Gen   19 | 464.3s | best=-443.7 mean=-1.2 std=166.7 stag=0
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=7 steps=200 dist=2.27m 
+[01:16:42] Gen   20 | 484.3s | best=-458.0 mean=-54.4 std=171.5 stag=0
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.29m 
+[01:24:44] Gen   21 | 481.9s | best=-479.0 mean=-5.8 std=172.1 stag=0
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.20m 
+[01:32:17] Gen   22 | 453.3s | best=-487.4 mean=-25.1 std=189.9 stag=0
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[01:40:09] Gen   23 | 471.8s | best=-496.0 mean=-4.9 std=187.9 stag=0
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.20m 
+[01:47:32] Gen   24 | 443.2s | best=-477.0 mean=-20.7 std=171.1 stag=1
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=9 steps=200 dist=2.19m 
+[01:55:26] Gen   25 | 474.0s | best=-485.4 mean=-120.4 std=207.0 stag=2
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[02:03:16] Gen   26 | 469.6s | best=-496.1 mean=-71.6 std=194.9 stag=0
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[02:10:29] Gen   27 | 432.9s | best=-482.0 mean=-29.5 std=199.7 stag=1
+  outcomes: goal=0 col=0 oob=4 timeout=16
+  best_genome: cells=9 steps=200 dist=2.20m 
+[02:18:10] Gen   28 | 460.9s | best=-495.0 mean=-64.9 std=203.3 stag=2
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[02:25:30] Gen   29 | 439.8s | best=-478.0 mean=-18.3 std=187.1 stag=3
+  outcomes: goal=0 col=1 oob=3 timeout=16
+  best_genome: cells=9 steps=200 dist=2.19m 
+[02:33:32] Gen   30 | 482.3s | best=-486.0 mean=-60.5 std=205.9 stag=4
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.21m 
+[02:41:10] Gen   31 | 458.3s | best=-483.0 mean=-15.9 std=202.8 stag=5
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: cells=9 steps=200 dist=2.20m 
+[02:48:39] Gen   32 | 448.5s | best=-486.7 mean=-15.8 std=180.8 stag=6
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[02:56:17] Gen   33 | 458.1s | best=-478.4 mean=-31.7 std=196.5 stag=7
+  outcomes: goal=0 col=1 oob=2 timeout=17
+  best_genome: cells=9 steps=200 dist=2.19m 
+[03:03:26] Gen   34 | 428.8s | best=-489.0 mean=-31.8 std=189.0 stag=8
+  outcomes: goal=0 col=1 oob=3 timeout=16
+  best_genome: cells=9 steps=200 dist=2.19m 
+[03:10:47] Gen   35 | 441.3s | best=-486.3 mean=-106.5 std=222.1 stag=9
+  outcomes: goal=0 col=0 oob=3 timeout=17
+  best_genome: cells=9 steps=200 dist=2.19m 
+[03:18:37] Gen   36 | 469.8s | best=-486.0 mean=-68.8 std=209.9 stag=10
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.19m 
+[03:18:37] Diversity inject at gen 36
+[03:25:51] Gen   37 | 433.5s | best=-481.4 mean=-52.7 std=195.6 stag=1
+  outcomes: goal=0 col=3 oob=0 timeout=17
+  best_genome: cells=9 steps=200 dist=2.21m 
+[03:33:39] Gen   38 | 468.1s | best=-479.0 mean=-62.6 std=232.0 stag=2
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.19m 
+[03:40:57] Gen   39 | 438.1s | best=-494.0 mean=-34.8 std=188.7 stag=3
+  outcomes: goal=0 col=0 oob=3 timeout=17
+  best_genome: cells=9 steps=200 dist=2.20m 
+[03:48:10] Gen   40 | 433.4s | best=-484.0 mean=-33.8 std=166.0 stag=4
+  outcomes: goal=0 col=1 oob=2 timeout=17
+  best_genome: cells=9 steps=200 dist=2.19m 
+[03:56:00] Gen   41 | 469.9s | best=-484.0 mean=-59.3 std=203.9 stag=5
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.20m 
+[04:03:43] Gen   42 | 462.7s | best=-489.0 mean=-76.3 std=197.2 stag=6
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[04:11:22] Gen   43 | 459.0s | best=-485.0 mean=-73.6 std=199.5 stag=7
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=9 steps=200 dist=2.18m 
+[04:18:30] Gen   44 | 428.1s | best=-484.0 mean=-61.2 std=193.9 stag=8
+  outcomes: goal=0 col=4 oob=0 timeout=16
+  best_genome: cells=9 steps=200 dist=2.19m 
+[04:26:36] Gen   45 | 486.4s | best=-484.0 mean=-34.1 std=193.4 stag=9
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.19m 
+[04:34:40] Gen   46 | 483.6s | best=-488.4 mean=-119.2 std=214.1 stag=10
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.20m 
+[04:34:40] Diversity inject at gen 46
+[04:42:30] Gen   47 | 469.5s | best=-484.0 mean=-63.2 std=215.7 stag=1
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.18m 
+[04:50:22] Gen   48 | 472.5s | best=-487.4 mean=-41.5 std=227.5 stag=2
+  outcomes: goal=0 col=0 oob=2 timeout=18
+  best_genome: cells=9 steps=200 dist=2.18m 
+[04:58:14] Gen   49 | 471.5s | best=-497.3 mean=-6.9 std=186.9 stag=0
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=9 steps=200 dist=2.18m 
+[05:06:06] Gen   50 | 472.6s | best=-474.0 mean=-45.0 std=227.6 stag=1
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[05:14:14] Gen   51 | 488.1s | best=-490.0 mean=-79.5 std=228.8 stag=2
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.20m 
+[05:22:02] Gen   52 | 467.5s | best=-482.0 mean=-100.4 std=237.2 stag=3
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=9 steps=200 dist=2.19m 
+[05:29:45] Gen   53 | 463.5s | best=-484.0 mean=-75.2 std=234.3 stag=4
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[05:37:51] Gen   54 | 485.6s | best=-484.0 mean=-71.4 std=221.1 stag=5
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.20m 
+[05:45:56] Gen   55 | 484.4s | best=-488.0 mean=-95.7 std=208.8 stag=6
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.18m 
+[05:53:56] Gen   56 | 480.9s | best=-493.0 mean=-87.0 std=226.2 stag=7
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[06:02:06] Gen   57 | 489.0s | best=-481.4 mean=-67.2 std=211.3 stag=8
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=9 steps=200 dist=2.19m 
+[06:10:00] Gen   58 | 474.8s | best=-492.0 mean=-37.5 std=196.1 stag=9
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[06:17:44] Gen   59 | 463.5s | best=-496.0 mean=-36.9 std=208.5 stag=10
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: cells=9 steps=200 dist=2.20m 
+[06:17:44] Diversity inject at gen 59
+[06:25:40] Gen   60 | 476.3s | best=-486.0 mean=-91.7 std=204.1 stag=1
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[06:32:59] Gen   61 | 438.7s | best=-484.1 mean=-97.3 std=242.5 stag=2
+  outcomes: goal=0 col=1 oob=3 timeout=16
+  best_genome: cells=7 steps=200 dist=1.80m 
+[06:40:49] Gen   62 | 470.4s | best=-451.0 mean=-14.8 std=187.5 stag=3
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=7 steps=200 dist=2.25m 
+[06:48:25] Gen   63 | 456.0s | best=-484.0 mean=-55.5 std=177.8 stag=4
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[06:56:23] Gen   64 | 477.8s | best=-484.3 mean=-91.7 std=192.4 stag=5
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=9 steps=200 dist=2.19m 
+[07:04:09] Gen   65 | 465.7s | best=-485.0 mean=-68.2 std=197.6 stag=6
+  outcomes: goal=0 col=0 oob=2 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[07:12:11] Gen   66 | 481.9s | best=-484.3 mean=-44.8 std=193.2 stag=7
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[07:20:10] Gen   67 | 479.0s | best=-488.3 mean=-58.3 std=223.1 stag=8
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=9 steps=200 dist=2.20m 
+[07:28:11] Gen   68 | 481.0s | best=-474.0 mean=-59.0 std=208.5 stag=9
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=8 steps=200 dist=2.19m 
+[07:35:52] Gen   69 | 461.1s | best=-489.0 mean=-4.5 std=193.0 stag=10
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.19m 
+[07:35:52] Diversity inject at gen 69
+[07:43:44] Gen   70 | 471.6s | best=-489.0 mean=-38.6 std=214.1 stag=1
+  outcomes: goal=0 col=0 oob=2 timeout=18
+  best_genome: cells=9 steps=200 dist=2.20m 
+[07:51:24] Gen   71 | 460.1s | best=-485.0 mean=-57.9 std=213.1 stag=2
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=9 steps=200 dist=2.19m 
+[07:59:08] Gen   72 | 463.7s | best=-491.0 mean=-42.6 std=191.0 stag=3
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=9 steps=200 dist=2.20m 
+[08:06:52] Gen   73 | 464.3s | best=-474.6 mean=-58.2 std=205.5 stag=4
+  outcomes: goal=0 col=0 oob=2 timeout=18
+  best_genome: cells=9 steps=200 dist=2.20m 
+[08:14:30] Gen   74 | 458.1s | best=-487.0 mean=-106.3 std=215.4 stag=5
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: cells=9 steps=200 dist=2.18m 
+[08:22:23] Gen   75 | 473.2s | best=-479.0 mean=-122.7 std=182.7 stag=6
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=9 steps=200 dist=2.20m 
+[08:33:40] Gen   76 | 677.2s | best=-499.0 mean=-29.8 std=179.3 stag=0
+  outcomes: goal=0 col=3 oob=1 timeout=16
+  best_genome: cells=9 steps=200 dist=2.19m 
+[08:46:07] Gen   77 | 746.1s | best=-525.0 mean=-109.7 std=207.9 stag=0
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=10 steps=200 dist=2.08m 
+[08:57:35] Gen   78 | 688.1s | best=-469.4 mean=-43.7 std=158.5 stag=1
+  outcomes: goal=0 col=6 oob=2 timeout=12
+  best_genome: cells=7 steps=200 dist=1.88m 
+[09:07:34] Gen   79 | 599.0s | best=-503.8 mean=-13.5 std=175.0 stag=2
+  outcomes: goal=0 col=8 oob=1 timeout=11
+  best_genome: cells=9 steps=200 dist=1.85m 
+[09:20:33] Gen   80 | 779.3s | best=-499.8 mean=-67.1 std=139.8 stag=3
+  outcomes: goal=0 col=3 oob=1 timeout=16
+  best_genome: cells=9 steps=200 dist=1.80m 
+[09:32:18] Gen   81 | 704.9s | best=-512.7 mean=-3.1 std=188.9 stag=4
+  outcomes: goal=0 col=4 oob=2 timeout=14
+  best_genome: cells=9 steps=200 dist=1.85m 
+[09:44:17] Gen   82 | 718.6s | best=-509.2 mean=-14.8 std=187.5 stag=5
+  outcomes: goal=0 col=4 oob=0 timeout=16
+  best_genome: cells=9 steps=200 dist=1.83m 
+[09:58:31] Gen   83 | 852.7s | best=-490.2 mean=-103.3 std=216.2 stag=6
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=8 steps=200 dist=1.87m 
+[10:09:48] Gen   84 | 677.9s | best=-483.6 mean=-42.8 std=177.0 stag=7
+  outcomes: goal=0 col=7 oob=1 timeout=12
+  best_genome: cells=8 steps=200 dist=1.98m 
+[10:20:37] Gen   85 | 648.9s | best=-508.4 mean=-2.9 std=176.1 stag=8
+  outcomes: goal=0 col=3 oob=3 timeout=14
+  best_genome: cells=9 steps=200 dist=1.76m 
+[10:32:46] Gen   86 | 728.3s | best=-510.8 mean=-72.7 std=202.9 stag=9
+  outcomes: goal=0 col=3 oob=1 timeout=16
+  best_genome: cells=9 steps=200 dist=1.87m 
+[10:44:46] Gen   87 | 719.8s | best=-477.7 mean=-59.6 std=202.9 stag=10
+  outcomes: goal=0 col=3 oob=1 timeout=16
+  best_genome: cells=8 steps=200 dist=1.89m 
+[10:44:46] Diversity inject at gen 87
+[10:55:03] Gen   88 | 617.5s | best=-501.5 mean=-16.4 std=176.9 stag=1
+  outcomes: goal=0 col=5 oob=1 timeout=14
+  best_genome: cells=9 steps=200 dist=1.86m 
+[11:07:21] Gen   89 | 738.0s | best=-488.2 mean=-33.6 std=177.9 stag=2
+  outcomes: goal=0 col=3 oob=1 timeout=16
+  best_genome: cells=8 steps=200 dist=2.05m 
+[11:19:31] Gen   90 | 729.1s | best=-519.5 mean=-94.4 std=221.9 stag=3
+  outcomes: goal=0 col=4 oob=1 timeout=15
+  best_genome: cells=11 steps=200 dist=1.83m 
+[11:32:59] Gen   91 | 807.8s | best=-482.9 mean=-140.4 std=207.5 stag=4
+  outcomes: goal=0 col=3 oob=0 timeout=17
+  best_genome: cells=10 steps=200 dist=2.09m 
+[11:43:49] Gen   92 | 650.3s | best=-486.9 mean=-46.2 std=208.5 stag=5
+  outcomes: goal=0 col=7 oob=1 timeout=12
+  best_genome: cells=8 steps=200 dist=1.95m 
+[11:53:36] Gen   93 | 587.0s | best=-483.7 mean=-73.2 std=198.6 stag=6
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=8 steps=200 dist=1.91m 
+[12:01:24] Gen   94 | 468.3s | best=-476.0 mean=-51.7 std=211.7 stag=7
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: cells=8 steps=200 dist=2.00m 
+[12:09:05] Gen   95 | 460.7s | best=-480.0 mean=-55.8 std=183.6 stag=8
+  outcomes: goal=0 col=0 oob=4 timeout=16
+  best_genome: cells=8 steps=200 dist=2.00m 
+[12:16:36] Gen   96 | 450.6s | best=-475.0 mean=-41.3 std=166.2 stag=9
+  outcomes: goal=0 col=2 oob=2 timeout=16
+  best_genome: cells=8 steps=200 dist=1.99m 
+[12:24:16] Gen   97 | 460.0s | best=-492.0 mean=-50.1 std=196.6 stag=10
+  outcomes: goal=0 col=1 oob=2 timeout=17
+  best_genome: cells=8 steps=200 dist=1.99m 
+[12:24:16] Diversity inject at gen 97
+[12:32:04] Gen   98 | 468.5s | best=-468.3 mean=-64.1 std=201.6 stag=1
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: cells=8 steps=200 dist=2.00m 
+[12:39:38] Gen   99 | 453.2s | best=-468.0 mean=-120.5 std=188.3 stag=2
+  outcomes: goal=0 col=2 oob=2 timeout=16
+  best_genome: cells=8 steps=200 dist=1.99m 
+[12:47:11] Gen  100 | 453.2s | best=-480.0 mean=-37.2 std=177.8 stag=3
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=8 steps=200 dist=2.00m 
+[12:55:04] Gen  101 | 472.9s | best=-479.3 mean=-81.1 std=207.4 stag=4
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: cells=8 steps=200 dist=2.00m 
+[13:03:23] Gen  102 | 499.4s | best=-475.0 mean=-66.9 std=223.9 stag=5
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: cells=8 steps=200 dist=1.98m 
+[13:11:25] Gen  103 | 482.3s | best=-470.4 mean=-37.5 std=196.7 stag=6
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=8 steps=200 dist=2.00m 
+[13:21:16] Gen  104 | 590.4s | best=-478.8 mean=-63.0 std=204.8 stag=7
+  outcomes: goal=0 col=3 oob=0 timeout=17
+  best_genome: cells=8 steps=200 dist=1.94m 
+[13:29:55] Gen  105 | 518.9s | best=-496.1 mean=-15.4 std=176.5 stag=8
+  outcomes: goal=0 col=5 oob=2 timeout=13
+  best_genome: cells=8 steps=200 dist=1.94m 
+[13:40:39] Gen  106 | 644.2s | best=-487.5 mean=-78.8 std=213.0 stag=9
+  outcomes: goal=0 col=1 oob=2 timeout=17
+  best_genome: cells=8 steps=200 dist=1.96m 
+[13:50:20] Gen  107 | 580.7s | best=-460.6 mean=-98.7 std=175.3 stag=10
+  outcomes: goal=0 col=10 oob=1 timeout=9
+  best_genome: cells=9 steps=200 dist=1.70m 
+[13:50:20] Diversity inject at gen 107
+[14:02:18] Gen  108 | 718.5s | best=-501.4 mean=-38.6 std=163.2 stag=1
+  outcomes: goal=0 col=3 oob=1 timeout=16
+  best_genome: cells=9 steps=200 dist=1.99m 
+[14:10:27] Gen  109 | 488.0s | best=-417.0 mean=-83.8 std=175.4 stag=2
+  outcomes: goal=0 col=9 oob=3 timeout=8
+  best_genome: cells=7 steps=200 dist=1.87m 
+[14:18:21] Gen  110 | 474.5s | best=-471.0 mean=-41.5 std=164.0 stag=3
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=8 steps=200 dist=2.21m 
+[14:26:30] Gen  111 | 489.2s | best=-418.0 mean=-120.5 std=188.9 stag=4
+  outcomes: goal=0 col=0 oob=1 timeout=19
+  best_genome: cells=8 steps=200 dist=2.21m 
+[14:34:41] Gen  112 | 490.5s | best=-303.3 mean=6.7 std=128.6 stag=5
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=5 steps=200 dist=1.46m 
+[14:43:35] Gen  113 | 534.3s | best=-411.1 mean=-62.5 std=197.3 stag=6
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=8 steps=200 dist=2.27m 
+[14:51:34] Gen  114 | 479.0s | best=-471.5 mean=-122.2 std=185.8 stag=7
+  outcomes: goal=0 col=3 oob=2 timeout=15
+  best_genome: cells=8 steps=200 dist=2.09m 
+[15:00:00] Gen  115 | 505.9s | best=-414.8 mean=-97.4 std=197.7 stag=8
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=8 steps=200 dist=2.25m 
+[15:08:28] Gen  116 | 507.7s | best=-481.2 mean=-77.1 std=185.8 stag=9
+  outcomes: goal=0 col=2 oob=1 timeout=17
+  best_genome: cells=8 steps=200 dist=2.11m 
+[15:16:37] Gen  117 | 489.0s | best=-473.7 mean=-73.0 std=161.9 stag=10
+  outcomes: goal=0 col=1 oob=1 timeout=18
+  best_genome: cells=8 steps=200 dist=2.24m 
+[15:16:37] Diversity inject at gen 117
+[15:24:07] Gen  118 | 450.1s | best=-424.0 mean=-17.8 std=207.1 stag=1
+  outcomes: goal=0 col=1 oob=2 timeout=17
+  best_genome: cells=7 steps=200 dist=2.18m 
+[15:31:50] Gen  119 | 463.4s | best=-464.0 mean=-105.8 std=218.6 stag=2
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: cells=8 steps=200 dist=2.28m 
+
+════════════════════════════════════════════════════════════
+Session 2026-04-08 22:02:01
+  MODE=sequential  POP=20  N_W=1140  STEPS=200
+  ELIM=0.1m  STOP=0.15m  SLOW=0.22m
+  Fitness v5: R_BEST=150.0  R_FINAL=80.0  R_GOAL=2000.0
+  Wall: only vx suppressed, wz always from NN
+════════════════════════════════════════════════════════════
+[22:09:01] Gen    0 | 415.9s | best=-140.4 mean=-24.6 std=58.9 stag=0
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: best_prog=+0.613m  final_prog=+0.607m  best_d=1.387m  cells=4  
+[22:16:10] Gen    1 | 429.2s | best=-117.6 mean=-34.0 std=58.0 stag=1
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: best_prog=+0.511m  final_prog=+0.511m  best_d=1.489m  cells=3  
+[22:23:18] Gen    2 | 427.6s | best=-117.4 mean=-43.9 std=63.2 stag=2
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: best_prog=+0.511m  final_prog=+0.511m  best_d=1.489m  cells=4  
+[22:29:56] Gen    3 | 397.6s | best=-140.5 mean=-40.1 std=70.0 stag=0
+  outcomes: goal=0 col=3 oob=0 timeout=17
+  best_genome: best_prog=+0.612m  final_prog=+0.609m  best_d=1.388m  cells=3  
+[22:37:05] Gen    4 | 429.3s | best=-140.4 mean=-35.5 std=67.8 stag=1
+  outcomes: goal=0 col=3 oob=0 timeout=17
+  best_genome: best_prog=+0.611m  final_prog=+0.609m  best_d=1.389m  cells=3  
+[22:44:19] Gen    5 | 433.9s | best=-180.2 mean=-61.3 std=68.2 stag=0
+  outcomes: goal=0 col=2 oob=0 timeout=18
+  best_genome: best_prog=+0.784m  final_prog=+0.783m  best_d=1.216m  cells=6  
+[22:52:06] Gen    6 | 467.6s | best=-179.4 mean=-81.7 std=54.3 stag=1
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: best_prog=+0.787m  final_prog=+0.767m  best_d=1.213m  cells=8  
+[22:59:35] Gen    7 | 448.6s | best=-210.9 mean=-71.3 std=67.9 stag=0
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: best_prog=+0.917m  final_prog=+0.917m  best_d=1.083m  cells=6  
+[23:07:01] Gen    8 | 445.6s | best=-180.5 mean=-73.7 std=61.0 stag=1
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: best_prog=+0.785m  final_prog=+0.785m  best_d=1.215m  cells=6  
+[23:14:49] Gen    9 | 468.2s | best=-205.0 mean=-93.3 std=52.7 stag=2
+  outcomes: goal=0 col=0 oob=0 timeout=20
+  best_genome: best_prog=+0.891m  final_prog=+0.891m  best_d=1.109m  cells=9  
+[23:22:17] Gen   10 | 447.6s | best=-181.0 mean=-71.9 std=64.9 stag=3
+  outcomes: goal=0 col=1 oob=0 timeout=19
+  best_genome: best_prog=+0.787m  final_prog=+0.787m  best_d=1.213m  cells=6  
