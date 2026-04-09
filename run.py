@@ -52,82 +52,102 @@ from sensor_msgs.msg import LaserScan
 # CONFIG  — tất cả hằng số ở đây
 # ══════════════════════════════════════════════════════════════════
 
+class MazeCfg:
+    """
+    Per-maze coordinates — tất cả mazes giống nhau về topology,
+    chỉ khác nhau ở X offset (từ gen_multi_maze.py).
+    """
+    def __init__(self, robot_id: int,
+                 start_x: float, start_y: float,
+                 goal_x: float,  goal_y: float,
+                 x_min: float,   x_max: float,
+                 y_min: float,   y_max: float):
+        self.robot_id = robot_id
+        self.start_x  = start_x
+        self.start_y  = start_y
+        self.goal_x   = goal_x
+        self.goal_y   = goal_y
+        self.x_min    = x_min
+        self.x_max    = x_max
+        self.y_min    = y_min
+        self.y_max    = y_max
+        self.cx       = (x_min + x_max) / 2.0
+        self.cy       = (y_min + y_max) / 2.0
+        self.start_d  = _dist(start_x, start_y, goal_x, goal_y)
+
+
+def _default_maze_configs(n: int) -> list:
+    """
+    Tạo N MazeCfg với X offset = 15m/maze.
+    Dùng khi --workers N được chỉ định mà không có MAZE_CONFIGS tùy chỉnh.
+
+    Maze gốc: x∈[2.0,4.5] → offset = 15.0m/maze (lidar 12m không với tới maze kế)
+    """
+    DX = 15.0
+    configs = []
+    for i in range(n):
+        dx = DX * i
+        configs.append(MazeCfg(
+            robot_id = i + 1,
+            start_x  = 2.25 + dx,  start_y = -3.25,
+            goal_x   = 4.25 + dx,  goal_y  = -3.25,
+            x_min    = 1.85 + dx,  x_max   = 4.65 + dx,
+            y_min    = -4.65,      y_max   = -1.85,
+        ))
+    return configs
+
+
 class Cfg:
     # Gazebo
-    WORLD    = "nhom8_mecanum"
-    ROBOT_ID = 1               # chỉ dùng 1 robot duy nhất
+    WORLD = "nhom8_mecanum"
 
-    # Mê cung (từ nhom8_maze.sdf)
-    START_X, START_Y = 2.25, -3.25
-    START_Z          = 0.064   # chassis z off ground
-    START_YAW        = 0.0     # 0 rad = facing +x into maze
-    GOAL_X,  GOAL_Y  = 4.25, -3.25
-    GOAL_R           = 0.25    # goal radius (m)
-    MAZE_X_MIN, MAZE_X_MAX = 1.85, 4.65
-    MAZE_Y_MIN, MAZE_Y_MAX = -4.65, -1.85
-    MAZE_CX, MAZE_CY        = 3.25, -3.25  # center of maze bounding box
-
-    # Robot (one_robot.sdf)
-    WHEEL_R = 0.024   # m
+    # Robot
+    WHEEL_R = 0.024
     LX, LY  = 0.08, 0.09
-    MAX_W   = 8.0     # rad/s → vx_max = 0.192 m/s (safe for 50cm corridor)
+    MAX_W   = 8.0
 
-    # Lidar (36 rays × 10°, range 0–12m)
-    N_RAYS   = 36
+    # Lidar
+    N_RAYS    = 36
     LIDAR_MAX = 12.0
-    OBS_IDX  = [0, 4, 9, 13, 18, 22, 27, 31]   # 8 rays ~45° apart for observation
-    FRONT_IDX = [34, 35, 0, 1, 2]               # ±20° front only — NOT side walls
-    ELIM_DIST = 0.10    # lidar < this → collision → episode ends
-    WALL_STOP = 0.15    # emergency: stop + rotate
-    WALL_SLOW = 0.22    # warning: slow down vx
-    ESCAPE_WZ = 1.2     # rad/s rotation when escaping wall
+    OBS_IDX   = [0, 4, 9, 13, 18, 22, 27, 31]
+    FRONT_IDX = [34, 35, 0, 1, 2]
+    ELIM_DIST = 0.10
+    WALL_STOP = 0.15
+    WALL_SLOW = 0.22
 
-    # Neural Network: 16 → 32(tanh) → 16(tanh) → 4(clip)
-    N_IN  = 16    # [lidar×8, dx_goal, dy_goal, dist, collision, sin_yaw, cos_yaw, x_rel, y_rel]
+    # Network: 16 → 32(tanh) → 16(tanh) → 4
+    N_IN  = 16
     N_H1  = 32
     N_H2  = 16
-    N_OUT = 4     # [w_fl, w_fr, w_rl, w_rr] ∈ [-1,1]
+    N_OUT = 4
     N_W   = N_IN*N_H1 + N_H1 + N_H1*N_H2 + N_H2 + N_H2*N_OUT + N_OUT  # 1140
 
-    # Genetic Algorithm
-    POP      = 20
-    ELITE    = 2
-    TOURN_K  = 3
-    CX_RATE  = 0.70
-    MUT_P    = 0.20    # probability per gene
-    MUT_STD  = 0.40    # gaussian std
-    W_CLIP   = 6.0
-    INIT_S   = 0.6
-    STAG_LIM  = 10     # gens without improvement before diversity injection
-    STAG_FRAC = 0.40   # fraction of non-elite to randomize on injection
+    # GA
+    POP       = 20
+    ELITE     = 2
+    TOURN_K   = 3
+    CX_RATE   = 0.70
+    MUT_P     = 0.20
+    MUT_STD   = 0.40
+    W_CLIP    = 6.0
+    INIT_S    = 0.6
+    STAG_LIM  = 10
+    STAG_FRAC = 0.40
 
     # Episode
-    MAX_STEPS = 200     # max steps per individual evaluation
-    STEP_DT   = 0.10    # s (10 Hz)
-    TELE_WAIT = 1.2     # s after teleport before episode starts
-    PARK_Z    = -5.0    # underground z for parking between evaluations
+    MAX_STEPS = 200
+    STEP_DT   = 0.10
+    TELE_WAIT = 1.2
+    PARK_Z    = -5.0
 
-    # ── Fitness v5: distance-first, zero noise ───────────────────────
-    #
-    # J = P_COLL×col + P_OOB×oob
-    #   − R_BEST ×(START_D − best_d)    ← closest moment to goal
-    #   − R_FINAL×(START_D − final_d)   ← final resting position
-    #   − R_GOAL ×goal
-    #
-    # Properties:
-    #   still robot      → J = 0       (neutral, moving robots dominate)
-    #   backward robot   → J > 0       (penalized via negative progress terms)
-    #   advances 1m      → J = −230    (strongly rewarded)
-    #   advances + coll  → J = 80−230  (still rewarded for best_d)
-    #   reaches goal     → J ≈ −2560   (dominant signal)
-    # ──────────────────────────────────────────────────────────────────
-    START_DIST = 2.0    # dist(START→GOAL) = 2.0m (computed manually)
+    # Fitness v5 (distance-based)
+    START_DIST = 2.0
     P_COLL  = 80.0
     P_OOB   = 120.0
-    R_BEST  = 150.0   # reward per meter at closest point
-    R_FINAL = 80.0    # reward per meter at final position
+    R_BEST  = 150.0
+    R_FINAL = 80.0
     R_GOAL  = 2000.0
-    CELL_SZ = 0.25    # for logging only, not in fitness
+    CELL_SZ = 0.25
 
     # Logging
     LOG  = "ga_training.log"
@@ -183,28 +203,26 @@ class MLP:
 
 class RobotAgent(Node):
     """
-    Minimal ROS2 node: subscribe /scanN + /model/robot_N/pose,
-    publish /model/robot_N/cmd_vel.
-    Thread-safe via _lock.
+    ROS2 node cho 1 robot trong 1 maze.
+    Nhận maze_cfg để observe() dùng tọa độ đúng của maze đó.
     """
 
-    def __init__(self):
-        super().__init__("ga_agent")
-        self._lock = threading.Lock()
-        self._scan = [C.LIDAR_MAX] * C.N_RAYS
-        self._x, self._y, self._yaw = C.START_X, C.START_Y, C.START_YAW
+    def __init__(self, maze: "MazeCfg"):
+        super().__init__(f"ga_agent_{maze.robot_id}")
+        self._lock  = threading.Lock()
+        self._scan  = [C.LIDAR_MAX] * C.N_RAYS
+        self._x, self._y, self._yaw = maze.start_x, maze.start_y, 0.0
+        self.maze   = maze
 
         qos = rclpy.qos.QoSProfile(
             reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT,
             history=rclpy.qos.HistoryPolicy.KEEP_LAST, depth=1)
 
-        self.create_subscription(
-            LaserScan, f"/scan{C.ROBOT_ID}", self._cb_scan, qos)
-        self.create_subscription(
-            Pose, f"/model/robot_{C.ROBOT_ID}/pose", self._cb_pose, qos)
-        self._pub = self.create_publisher(
-            Twist, f"/model/robot_{C.ROBOT_ID}/cmd_vel", 10)
-        self.get_logger().info("RobotAgent ready (single robot mode).")
+        rid = maze.robot_id
+        self.create_subscription(LaserScan, f"/scan{rid}", self._cb_scan, qos)
+        self.create_subscription(Pose, f"/model/robot_{rid}/pose", self._cb_pose, qos)
+        self._pub = self.create_publisher(Twist, f"/model/robot_{rid}/cmd_vel", 10)
+        self.get_logger().info(f"Agent robot_{rid} maze offset={maze.start_x - 2.25:.1f}m")
 
     def _cb_scan(self, msg: LaserScan):
         with self._lock:
@@ -220,68 +238,39 @@ class RobotAgent(Node):
             self._yaw = 2.0 * math.atan2(msg.orientation.z, msg.orientation.w)
 
     def observe(self) -> np.ndarray:
-        """
-        16-dim observation vector:
-          [0:8]  lidar ∈ [0,1]        (8 rays ~45° apart)
-          [8:10] goal relative dir     (dx/4, dy/4)
-          [10]   dist to goal / 8
-          [11]   collision flag        (1 if lidar_min < ELIM_DIST)
-          [12:14] heading              (sin_yaw, cos_yaw)
-          [14:16] position vs center   (x_rel/2, y_rel/2)
-        """
+        """16-dim observation using THIS maze's goal/center coordinates."""
         with self._lock:
             scan = list(self._scan)
             x, y, yaw = self._x, self._y, self._yaw
-
+        m = self.maze
         lidar = np.array(
             [min(scan[i], C.LIDAR_MAX)/C.LIDAR_MAX for i in C.OBS_IDX],
             dtype=np.float32)
-        dist  = _dist(x, y, C.GOAL_X, C.GOAL_Y)
+        dist = _dist(x, y, m.goal_x, m.goal_y)
         return np.array([
             *lidar,
-            (C.GOAL_X - x) / 4.0,
-            (C.GOAL_Y - y) / 4.0,
+            (m.goal_x - x) / 4.0,   # goal-relative dx
+            (m.goal_y - y) / 4.0,   # goal-relative dy
             min(dist, 8.0) / 8.0,
             1.0 if min(scan) < C.ELIM_DIST else 0.0,
             math.sin(yaw), math.cos(yaw),
-            (x - C.MAZE_CX) / 2.0,
-            (y - C.MAZE_CY) / 2.0,
+            (x - m.cx) / 2.0,       # position relative to maze center
+            (y - m.cy) / 2.0,
         ], dtype=np.float32)
 
     def act(self, action: np.ndarray):
-        """
-        Publish action with SOFT wall enforcement.
-
-        ── Lý do KHÔNG dùng hard escape rotation ──────────────────
-        Code cũ: khi gần tường → ghi đè wz = ±ESCAPE_WZ (bỏ qua NN)
-        Hậu quả: NN không bao giờ học cách quay (bị override liên tục)
-                 Robot lắc qua lại: turn → clear wall → forward → hit wall → turn...
-
-        Thiết kế mới:
-          • wz LUÔN đến từ NN (NN tự học quay tránh tường)
-          • Chỉ giảm/dừng vx khi tường ở phía trước
-          • vy cũng bị dừng khi rất gần tường (mọi hướng)
-          Collision penalty trong fitness dạy NN tránh tường.
-        """
+        """vx/vy blocked near walls; wz ALWAYS from NN."""
         with self._lock:
             scan = list(self._scan)
-
         min_all   = min(scan)
         min_front = min(scan[i] for i in C.FRONT_IDX)
-
         vx, vy, wz = MLP.to_twist(action)
-
         if min_all < C.WALL_STOP:
-            # Rất gần tường bất kỳ hướng: dừng vx+vy, giữ wz của NN
-            # NN tự xoay thoát — đây là kỹ năng NN cần học
             self._pub_twist(0.0, 0.0, wz)
             return
-
         if min_front < C.WALL_SLOW:
-            # Tiếp cận tường phía trước: scale vx xuống mượt
             t   = (min_front - C.WALL_STOP) / (C.WALL_SLOW - C.WALL_STOP)
-            vx *= max(0.0, t ** 1.5)   # power 1.5 = smooth braking
-
+            vx *= max(0.0, t ** 1.5)
         self._pub_twist(vx, vy, wz)
 
     def stop(self):
@@ -301,7 +290,6 @@ class RobotAgent(Node):
         with self._lock: return min(self._scan)
 
     def reset_scan(self):
-        """Clear stale scan from underground parking (PARK_Z=-5m)."""
         with self._lock:
             self._scan = [C.LIDAR_MAX] * C.N_RAYS
 
@@ -311,34 +299,27 @@ class RobotAgent(Node):
 # ══════════════════════════════════════════════════════════════════
 
 class EpResult:
-    """Metrics from one genome evaluation."""
-    def __init__(self):
+    def __init__(self, start_dist: float = C.START_DIST):
         self.steps     = 0
         self.goal      = False
         self.collision = False
         self.oob       = False
-        self.cells     = 0        # unique cells (for logging only)
-        self.best_d    = C.START_DIST   # minimum dist to goal seen (best moment)
-        self.final_d   = C.START_DIST   # dist at episode end
+        self.cells     = 0
+        self.best_d    = start_dist
+        self.final_d   = start_dist
         self.fitness   = 0.0
 
 
 def evaluate(agent: RobotAgent, mlp: MLP, max_steps: int) -> EpResult:
     """
-    Evaluate one genome: teleport already done by Trainer.
-
-    Key design decisions:
-    1. Track best_d (minimum distance ever) — rewards robot even if it
-       collides AFTER getting close to goal.
-    2. Cell counting only for LOGGING, not fitness.
-    3. No yaw spread — always START_YAW (user request).
-    4. wz comes entirely from NN (wall enforcement doesn't override wz).
+    Evaluate one genome in agent's maze.
+    Uses agent.maze for all coordinate references.
     """
-    res    = EpResult()
-    best_d = C.START_DIST            # track closest distance achieved
-    cells  = {_cell(C.START_X, C.START_Y)}
-    # Track actual physical cells (require movement > CELL_SZ/2 to count new cell)
-    last_cell_x, last_cell_y = C.START_X, C.START_Y
+    m      = agent.maze
+    res    = EpResult(start_dist=m.start_d)
+    best_d = m.start_d
+    cells  = {_cell(m.start_x, m.start_y)}
+    lcx, lcy = m.start_x, m.start_y
 
     for step in range(max_steps):
         t0     = time.perf_counter()
@@ -346,66 +327,45 @@ def evaluate(agent: RobotAgent, mlp: MLP, max_steps: int) -> EpResult:
         action = mlp.forward(obs)
         agent.act(action)
 
-        x, y, yaw = agent.pose
-        s_min     = agent.scan_min
-        res.steps  = step + 1
+        x, y, _ = agent.pose
+        s_min    = agent.scan_min
+        res.steps = step + 1
 
-        # ── Terminate ──────────────────────────────────────────
-        if not (C.MAZE_X_MIN <= x <= C.MAZE_X_MAX and
-                C.MAZE_Y_MIN <= y <= C.MAZE_Y_MAX):
-            res.oob = True
-            break
+        if not (m.x_min <= x <= m.x_max and m.y_min <= y <= m.y_max):
+            res.oob = True;  break
 
         if s_min < C.ELIM_DIST:
-            res.collision = True
-            break
+            res.collision = True;  break
 
-        d = _dist(x, y, C.GOAL_X, C.GOAL_Y)
+        d = _dist(x, y, m.goal_x, m.goal_y)
         if d < C.GOAL_R:
-            res.goal = True
-            best_d = min(best_d, d)
+            res.goal  = True
+            best_d    = min(best_d, d)
             break
 
-        # ── Track best distance ────────────────────────────────
         if d < best_d:
             best_d = d
 
-        # ── Cell counting (LOG only) — require real movement ────
-        # Threshold: only count new cell if moved > CELL_SZ/2 from last cell
-        if _dist(x, y, last_cell_x, last_cell_y) > C.CELL_SZ / 2:
+        if _dist(x, y, lcx, lcy) > C.CELL_SZ / 2:
             cells.add(_cell(x, y))
-            last_cell_x, last_cell_y = x, y
+            lcx, lcy = x, y
 
         rem = C.STEP_DT - (time.perf_counter() - t0)
-        if rem > 0:
-            time.sleep(rem)
+        if rem > 0: time.sleep(rem)
 
     agent.stop()
     x, y, _ = agent.pose
     res.cells   = len(cells)
     res.best_d  = best_d
-    res.final_d = _dist(x, y, C.GOAL_X, C.GOAL_Y)
-    res.fitness = _fitness(res)
+    res.final_d = _dist(x, y, m.goal_x, m.goal_y)
+    res.fitness = _fitness(res, m.start_d)
     return res
 
 
-def _fitness(r: EpResult) -> float:
-    """
-    J = penalties − rewards   (minimize J, more negative = better robot)
-
-    Thiết kế hoàn toàn dựa trên KHOẢNG CÁCH:
-      best_prog  = START_D − best_d   ∈ [0, 2.0]  (robot đến gần nhất)
-      final_prog = START_D − final_d  ∈ (-∞, 2.0] (âm nếu đi lùi)
-
-    Tại sao dùng cả best_prog và final_prog?
-      • best_prog:  robot bị collision sau khi tiến xa vẫn được reward
-                    → GA có tín hiệu học cả kỹ năng "đi tới"
-      • final_prog: robot cần DỪ LẠI GẦN GOAL, không chỉ đi qua rồi lùi
-                    → áp lực duy trì vị trí tốt
-    """
-    best_prog  = C.START_DIST - r.best_d    # luôn ≥ 0
-    final_prog = C.START_DIST - r.final_d   # có thể âm (đi lùi)
-
+def _fitness(r: EpResult, start_d: float = C.START_DIST) -> float:
+    """J = penalties − rewards. Minimize J."""
+    best_prog  = start_d - r.best_d
+    final_prog = start_d - r.final_d
     P = C.P_COLL * r.collision + C.P_OOB * r.oob
     R = C.R_BEST * best_prog + C.R_FINAL * final_prog + C.R_GOAL * r.goal
     return float(P - R)
@@ -562,99 +522,165 @@ class Logger:
 
 class Trainer:
     """
-    Main training loop — sequential single-agent evaluation.
+    GA Training loop với hỗ trợ parallel evaluation trên N mazes.
 
-    Per generation:
-      for i in range(POP):
-          teleport robot to START (with spread yaw)
-          run_episode → EpResult → fitness[i]
-          park robot underground (clean scan for next eval)
-      GA.set_fits() → GA.evolve()
-      checkpoint every 5 gens
+    ── Kiến trúc Parallel Batch ──────────────────────────────────────
+    Với N workers (mazes), mỗi generation chạy ceil(POP/N) batches.
+    Trong mỗi batch: N genomes được đánh giá SONG SONG,
+    mỗi genome trong maze riêng của nó → không lidar cross-talk.
+
+    POP=20, N=5:  4 batches × 5 parallel  =  ~85s/gen  (5× nhanh hơn)
+    POP=20, N=1:  20 batches × 1          = ~427s/gen  (tuần tự)
+    POP=20, N=20: 1 batch  × 20 parallel  =  ~21s/gen (nhanh nhất)
+
+    ── Điều kiện để parallel đúng ────────────────────────────────────
+    1. Mỗi maze là bản copy giống hệt → fitness tương đương
+    2. Khoảng cách mazes ≥ 15m → lidar không thấy maze kế
+    3. Mỗi robot có bridge riêng → topic không overlap
+    4. evaluate() thread-safe: không share mutable state
+
+    ── Cách dùng ─────────────────────────────────────────────────────
+    # 1 maze (sequential, bản cũ):
+    python3 ga_nn_controller.py --workers 1
+
+    # 5 mazes (parallel 5×):
+    gz sim nhom8_multi5.sdf      # maze SDF từ gen_multi_maze.py
+    ./spawn_robot.sh 5           # spawn robot_1..5
+    python3 ga_nn_controller.py --workers 5
+
+    # 20 mazes (parallel 20× — 1 batch = 1 gen):
+    gz sim nhom8_multi20.sdf
+    ./spawn_robot.sh 20
+    python3 ga_nn_controller.py --workers 20
     """
 
-    def __init__(self, n_gen: int, steps: int, ga: GA):
-        self.n_gen  = n_gen
-        self.steps  = steps
-        self.ga     = ga
-        self.agent  = None
-        self.logger = Logger()
-        self._exec  = None
+    def __init__(self, n_gen: int, steps: int, ga: GA,
+                 maze_configs: list):
+        """
+        maze_configs: list of MazeCfg, length = number of parallel workers.
+        """
+        self.n_gen   = n_gen
+        self.steps   = steps
+        self.ga      = ga
+        self.mazes   = maze_configs   # N MazeCfg objects
+        self.n_w     = len(maze_configs)
+        self.agents  = []
+        self.logger  = Logger()
+        self._exec   = None
 
     def setup(self):
+        """Create N RobotAgent nodes, start executor, park all robots."""
         rclpy.init()
-        self.agent = RobotAgent()
-        self._exec = MultiThreadedExecutor(num_threads=4)
-        self._exec.add_node(self.agent)
-        threading.Thread(target=self._exec.spin, daemon=True).start()
-        print("  Waiting for Gazebo bridge (3s)...", end="", flush=True)
+        self.agents = [RobotAgent(m) for m in self.mazes]
+        n_threads   = self.n_w * 2 + 4
+        self._exec  = MultiThreadedExecutor(num_threads=n_threads)
+        for ag in self.agents:
+            self._exec.add_node(ag)
+        threading.Thread(target=self._exec.spin, daemon=True,
+                         name="ros2_spin").start()
+
+        print(f"  Waiting for Gazebo bridge (3s)...", end="", flush=True)
         time.sleep(3.0)
         print(" OK")
-        # Park first so initial scan is clean (no ground reflections at z=-5)
-        self._park()
+        # Park all robots underground so initial scans are clean
+        self._park_all()
         time.sleep(0.5)
-        print("  Initial park complete — scan cleared.")
+        print(f"  {self.n_w} worker(s) ready.")
 
     def train(self):
         pop_n = len(self.ga.pop)
+        batches = -(-pop_n // self.n_w)   # ceil division
+        speedup = pop_n / batches
         _banner(
-            f"GA-RL v5 Sequential  POP={pop_n}  GEN={self.n_gen}  STEPS={self.steps}",
+            f"GA-RL Parallel Training  POP={pop_n}  GEN={self.n_gen}  WORKERS={self.n_w}",
+            f"  Batches/gen: {batches} × {self.n_w} parallel  "
+            f"(speedup ≈ {speedup:.1f}×)",
             f"  Net: {C.N_IN}→{C.N_H1}→{C.N_H2}→{C.N_OUT}  Weights={C.N_W}",
-            f"  Fitness: pure distance  R_BEST={C.R_BEST}  R_FINAL={C.R_FINAL}  R_GOAL={C.R_GOAL}",
-            f"  Wall: only vx suppressed, wz ALWAYS from NN (no forced escape rotation)",
-            f"  Yaw: fixed START_YAW={C.START_YAW:.2f} (straight into maze)",
-            f"  START ({C.START_X},{C.START_Y}) → GOAL ({C.GOAL_X},{C.GOAL_Y})  dist={C.START_DIST}m",
+            f"  Fitness: R_BEST={C.R_BEST}  R_FINAL={C.R_FINAL}  R_GOAL={C.R_GOAL}",
+            f"  Maze DX spacing: {self.mazes[1].start_x - self.mazes[0].start_x:.1f}m"
+              if self.n_w > 1 else "  Single maze mode",
         )
-
         t0 = time.time()
 
         for gen in range(self.n_gen):
             gen_t   = time.time()
-            fits    = []
-            results = []
+            fits    = [None] * pop_n
+            results = [None] * pop_n
 
-            print(f"\n  Gen {self.ga.gen:4d} │ Evaluating {pop_n} genomes...")
+            print(f"\n  Gen {self.ga.gen:4d} │ {pop_n} genomes × {self.n_w} workers "
+                  f"= {batches} batches")
 
-            for idx in range(pop_n):
-                mlp = MLP(self.ga.pop[idx])
+            # ── Batch parallel evaluation ─────────────────────────
+            for batch_i in range(batches):
+                batch_start = batch_i * self.n_w
+                batch_end   = min(batch_start + self.n_w, pop_n)
+                batch_idx   = list(range(batch_start, batch_end))
+                n_active    = len(batch_idx)
 
-                # Always use START_YAW — straight into maze, consistent evaluation
-                self._teleport(C.START_X, C.START_Y, C.START_Z, C.START_YAW)
-                self.agent.reset_scan()
+                # Teleport active robots to START simultaneously
+                tele_threads = []
+                for slot, genome_i in enumerate(batch_idx):
+                    ag = self.agents[slot]
+                    t  = threading.Thread(
+                        target=self._teleport_agent,
+                        args=(ag,), daemon=True)
+                    tele_threads.append(t)
+                    t.start()
+                for t in tele_threads: t.join()
+
+                # Reset scans after teleport
+                for slot in range(n_active):
+                    self.agents[slot].reset_scan()
                 time.sleep(C.TELE_WAIT)
 
-                r = evaluate(self.agent, mlp, self.steps)
-                fits.append(r.fitness)
-                results.append(r)
+                # Launch N parallel evaluations
+                batch_results = [None] * n_active
+                eval_threads  = []
+                for slot, genome_i in enumerate(batch_idx):
+                    ag  = self.agents[slot]
+                    mlp = MLP(self.ga.pop[genome_i])
+                    def _run(slot=slot, ag=ag, mlp=mlp):
+                        batch_results[slot] = evaluate(ag, mlp, self.steps)
+                    t = threading.Thread(target=_run, daemon=True)
+                    eval_threads.append(t)
+                    t.start()
+                for t in eval_threads: t.join()
 
-                best_prog  = C.START_DIST - r.best_d
-                final_prog = C.START_DIST - r.final_d
-                icon = "🏁" if r.goal else "💥" if r.collision else "🚪" if r.oob else "⏱"
-                print(f"    [{idx+1:2d}/{pop_n}] {icon} "
-                      f"J={r.fitness:8.1f}  "
-                      f"best_prog={best_prog:+.2f}m  final_prog={final_prog:+.2f}m  "
-                      f"cells={r.cells:3d}  steps={r.steps:3d}", flush=True)
+                # Collect results and park
+                for slot, genome_i in enumerate(batch_idx):
+                    r = batch_results[slot]
+                    fits[genome_i]    = r.fitness
+                    results[genome_i] = r
+                    bp   = self.mazes[slot].start_d - r.best_d
+                    fp   = self.mazes[slot].start_d - r.final_d
+                    icon = "🏁" if r.goal else "💥" if r.collision \
+                           else "🚪" if r.oob else "⏱"
+                    print(f"    [{genome_i+1:2d}/{pop_n}|b{batch_i}] {icon} "
+                          f"J={r.fitness:8.1f}  "
+                          f"bp={bp:+.2f}m  fp={fp:+.2f}m  "
+                          f"cells={r.cells:2d}  steps={r.steps:3d}",
+                          flush=True)
 
-                self._park()
+                self._park_all()   # park between batches
 
             ep_t = time.time() - gen_t
             self.ga.set_fits(fits)
             self.logger.log_gen(self.ga.gen, fits, results, ep_t, self.ga)
 
             best_r = results[int(np.argmin(fits))]
+            m0     = self.mazes[0]
+            bp     = m0.start_d - best_r.best_d
+            fp     = m0.start_d - best_r.final_d
             bar    = _pbar(-min(fits), C.R_GOAL)
-            bp = C.START_DIST - best_r.best_d
-            fp = C.START_DIST - best_r.final_d
             print(f"\n  Gen {self.ga.gen:4d} │ {bar} │ "
                   f"best={min(fits):.1f}  mean={float(np.mean(fits)):.1f}  "
-                  f"stag={self.ga._stag}")
+                  f"stag={self.ga._stag}  time={ep_t:.0f}s")
             print(f"  Gen {self.ga.gen:4d} │ best_genome: "
                   f"best_prog={bp:+.3f}m  final_prog={fp:+.3f}m  "
-                  f"cells={best_r.cells}  "
                   f"{'★ GOAL!' if best_r.goal else f'dist={best_r.final_d:.2f}m'}")
 
             if self.ga._stag >= C.STAG_LIM:
-                self.logger.log_event(f"Diversity inject at gen {self.ga.gen}")
+                self.logger.log_event(f"Diversity inject gen={self.ga.gen}")
             self.ga.evolve()
 
             if (gen+1) % 5 == 0:
@@ -665,24 +691,31 @@ class Trainer:
         self.ga.save(f"{C.CKPT}/final.json")
         total = time.time() - t0
         self.logger.log_end(self.ga.best_f, total)
-        _banner(f"Done! best_J={self.ga.best_f:.1f}  time={total/60:.1f}min",
-                f"Best: {C.CKPT}/best.json  |  CSV: {C.CSV}")
+        _banner(f"Done!  best_J={self.ga.best_f:.1f}  time={total/60:.1f}min",
+                f"Best checkpoint: {C.CKPT}/best.json",
+                f"CSV: {C.CSV}")
 
     def demo(self, genome: np.ndarray):
-        """Run best genome once (no termination on collision — let it run)."""
+        """Run best genome in maze 0."""
         mlp = MLP(genome)
-        print(f"\n  Demo: ({C.START_X},{C.START_Y}) → ({C.GOAL_X},{C.GOAL_Y})")
-        self._teleport(C.START_X, C.START_Y, C.START_Z, C.START_YAW)
-        self.agent.reset_scan()
+        ag  = self.agents[0]
+        m   = self.mazes[0]
+        print(f"\n  Demo: ({m.start_x:.2f},{m.start_y:.2f}) → ({m.goal_x:.2f},{m.goal_y:.2f})")
+        self._teleport_agent(ag)
+        ag.reset_scan()
         time.sleep(C.TELE_WAIT)
-        r = evaluate(self.agent, mlp, max_steps=5000)
-        print(f"  {'GOAL!' if r.goal else 'collision' if r.collision else 'OOB' if r.oob else 'timeout'}"
+        r = evaluate(ag, mlp, max_steps=5000)
+        print(f"  {'GOAL!' if r.goal else 'col' if r.collision else 'OOB' if r.oob else 'timeout'}"
               f"  steps={r.steps}  cells={r.cells}  dist={r.final_d:.2f}m  J={r.fitness:.1f}")
 
-    def _teleport(self, x, y, z, yaw):
-        qz, qw = math.sin(yaw/2), math.cos(yaw/2)
-        req = (f"name: 'robot_{C.ROBOT_ID}' "
-               f"position {{ x: {x} y: {y} z: {z} }} "
+    # ── Teleport helpers ─────────────────────────────────────────
+
+    def _teleport_agent(self, agent: RobotAgent, yaw: float = 0.0):
+        """Teleport agent to its maze's START position."""
+        m  = agent.maze
+        qz = math.sin(yaw/2); qw = math.cos(yaw/2)
+        req = (f"name: 'robot_{m.robot_id}' "
+               f"position {{ x: {m.start_x} y: {m.start_y} z: 0.064 }} "
                f"orientation {{ x: 0.0 y: 0.0 z: {qz:.6f} w: {qw:.6f} }}")
         try:
             subprocess.run(
@@ -693,17 +726,38 @@ class Trainer:
         except (subprocess.TimeoutExpired, FileNotFoundError):
             pass
 
-    def _park(self):
-        self._teleport(C.START_X, C.START_Y, C.PARK_Z, C.START_YAW)
-        time.sleep(0.15)
+    def _park_agent(self, agent: RobotAgent):
+        """Park agent underground (scan clean for next eval)."""
+        m  = agent.maze
+        req = (f"name: 'robot_{m.robot_id}' "
+               f"position {{ x: {m.start_x} y: {m.start_y} z: {C.PARK_Z} }} "
+               f"orientation {{ x: 0.0 y: 0.0 z: 0.0 w: 1.0 }}")
+        try:
+            subprocess.run(
+                ["gz","service","-s",f"/world/{C.WORLD}/set_pose",
+                 "--reqtype","gz.msgs.Pose","--reptype","gz.msgs.Boolean",
+                 "--req",req,"--timeout","1000"],
+                capture_output=True, timeout=2.0)
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    def _park_all(self):
+        """Park all workers simultaneously."""
+        threads = [threading.Thread(target=self._park_agent, args=(ag,), daemon=True)
+                   for ag in self.agents]
+        for t in threads: t.start()
+        for t in threads: t.join()
+        time.sleep(0.1)
 
     def shutdown(self):
-        try: self.agent and self.agent.stop()
-        except: pass
+        for ag in self.agents:
+            try: ag.stop()
+            except: pass
         try: self._exec and self._exec.shutdown()
         except: pass
-        try: self.agent and self.agent.destroy_node()
-        except: pass
+        for ag in self.agents:
+            try: ag.destroy_node()
+            except: pass
         try: rclpy.shutdown()
         except: pass
 
@@ -737,53 +791,73 @@ def _banner(*lines):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="GA-RL Mecanum Maze — Sequential 1-robot evaluation",
+        description="GA-RL Mecanum Maze — Parallel multi-maze evaluation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python3 ga_nn_controller.py --pop 20 --gen 500 --steps 200
-  python3 ga_nn_controller.py --load ga_checkpoints/best.json --gen 200
-  python3 ga_nn_controller.py --run  ga_checkpoints/best.json
-  python3 ga_nn_controller.py --info
+  # Sequential (1 maze, bản cũ):
+  python3 ga_nn_controller.py --pop 20 --gen 500 --workers 1
+
+  # Parallel 5× (cần nhom8_multi5.sdf + ./spawn_robot.sh 5):
+  python3 ga_nn_controller.py --pop 20 --gen 500 --workers 5
+
+  # Tiếp tục từ checkpoint:
+  python3 ga_nn_controller.py --load ga_checkpoints/best.json --workers 5
+
+  # Demo best genome:
+  python3 ga_nn_controller.py --run  ga_checkpoints/best.json --workers 1
+
+  # Tạo multi-maze SDF:
+  python3 gen_multi_maze.py nhom8_maze.sdf --n 5 --out nhom8_multi5.sdf
 """)
-    ap.add_argument("--pop",   type=int, default=C.POP,       help="Population size (default 20)")
-    ap.add_argument("--gen",   type=int, default=200,          help="Generations (default 200)")
-    ap.add_argument("--steps", type=int, default=C.MAX_STEPS,  help="Steps per genome (default 200)")
-    ap.add_argument("--load",  type=str, default=None,         help="Resume from checkpoint JSON")
-    ap.add_argument("--run",   type=str, default=None,         help="Demo best genome from checkpoint")
-    ap.add_argument("--seed",  type=int, default=42,           help="Random seed")
-    ap.add_argument("--info",  action="store_true",            help="Print architecture and exit")
+    ap.add_argument("--pop",     type=int, default=C.POP,      help="Population size")
+    ap.add_argument("--gen",     type=int, default=200,         help="Generations")
+    ap.add_argument("--steps",   type=int, default=C.MAX_STEPS, help="Steps per genome")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="Number of parallel mazes/workers (default 1 = sequential)")
+    ap.add_argument("--load",  type=str, default=None,  help="Resume from checkpoint")
+    ap.add_argument("--run",   type=str, default=None,  help="Demo best genome")
+    ap.add_argument("--seed",  type=int, default=42)
+    ap.add_argument("--info",  action="store_true",     help="Print architecture and exit")
     args = ap.parse_args()
 
     if args.info:
         _banner(
-            f"Network: {C.N_IN} → {C.N_H1}(tanh) → {C.N_H2}(tanh) → {C.N_OUT}(clip)",
-            f"Total weights: {C.N_W}",
-            "Inputs:",
-            "  [0:8]   8 lidar rays normalized to [0,1]",
-            "  [8:10]  goal direction (dx/4, dy/4)",
-            "  [10]    distance to goal / 8.0",
-            "  [11]    collision flag (1 = lidar_min < ELIM_DIST)",
-            "  [12:14] heading (sin_yaw, cos_yaw) — robot orientation",
-            "  [14:16] position relative to maze center / 2.0",
-            f"GA: POP={C.POP}  ELITE={C.ELITE}  MUT_P={C.MUT_P}  MUT_STD={C.MUT_STD}",
-            f"    stagnation inject after {C.STAG_LIM} gens, reset {C.STAG_FRAC*100:.0f}% of non-elite",
-            "Fitness (minimize J = penalties − rewards):",
-            f"  Penalties: collision×{C.P_COLL}  OOB×{C.P_OOB}  still×{C.P_STILL}/step",
-            f"  Rewards:   cells×{C.R_CELL}  dist×{C.R_DIST}  angle×{C.R_ANGLE}/step  goal×{C.R_GOAL}",
+            f"Network: {C.N_IN}→{C.N_H1}(tanh)→{C.N_H2}(tanh)→{C.N_OUT}(clip)",
+            f"Weights: {C.N_W}",
+            "Inputs [0:8]  8 lidar rays ∈ [0,1]",
+            "       [8:10] goal relative direction (dx/4, dy/4)",
+            "       [10]   distance to goal / 8",
+            "       [11]   collision flag",
+            "       [12:14] heading: sin_yaw, cos_yaw",
+            "       [14:16] position vs maze center / 2",
+            f"GA: POP={C.POP} ELITE={C.ELITE} MUT_P={C.MUT_P} MUT_STD={C.MUT_STD}",
+            "Fitness: J = P_COLL×col + P_OOB×oob",
+            f"           − R_BEST×(S−best_d)  [{C.R_BEST}]",
+            f"           − R_FINAL×(S−final_d) [{C.R_FINAL}]",
+            f"           − R_GOAL×goal         [{C.R_GOAL}]",
+            "Parallel: N mazes × N robots, DX=15m (lidar-safe), eval in threads",
         )
         return
+
+    # ── Build maze configs ────────────────────────────────────────
+    maze_configs = _default_maze_configs(args.workers)
+    print(f"\n  Workers: {args.workers}")
+    for m in maze_configs:
+        print(f"    robot_{m.robot_id}: START({m.start_x:.2f},{m.start_y:.2f}) "
+              f"GOAL({m.goal_x:.2f},{m.goal_y:.2f})  "
+              f"bounds x∈[{m.x_min:.2f},{m.x_max:.2f}]")
 
     ga = GA(pop=args.pop, seed=args.seed)
     if args.load:
         ga.load(args.load)
 
-    trainer = Trainer(n_gen=args.gen, steps=args.steps, ga=ga)
+    trainer = Trainer(n_gen=args.gen, steps=args.steps, ga=ga,
+                      maze_configs=maze_configs)
 
     if args.run:
         if ga.best_g is None:
-            print("  No best genome in checkpoint.")
-            return
+            print("  No best genome in checkpoint."); return
         try:
             trainer.setup()
             trainer.demo(ga.best_g)
@@ -795,7 +869,7 @@ Examples:
         trainer.setup()
         trainer.train()
     except KeyboardInterrupt:
-        print("\n  Interrupted — saving checkpoint...")
+        print("\n  Interrupted — saving...")
         ga.save(f"{C.CKPT}/interrupted_gen{ga.gen}.json")
     except Exception as e:
         print(f"\n  ERROR: {type(e).__name__}: {e}")
@@ -804,6 +878,10 @@ Examples:
     finally:
         trainer.shutdown()
 
+
+if __name__ == "__main__":
+    main()
+    args = ap.parse_args()
 
 if __name__ == "__main__":
     main()
