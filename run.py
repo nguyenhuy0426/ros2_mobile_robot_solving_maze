@@ -83,16 +83,20 @@ def _default_maze_configs(n: int) -> list:
 
     Maze gốc: x∈[2.0,4.5] → offset = 15.0m/maze (lidar 12m không với tới maze kế)
     """
-    DX = 15.0
+    DY = 3.5
     configs = []
     for i in range(n):
-        dx = DX * i
+        dy = -DY * i   # y đi xuống cho maze tiếp theo
         configs.append(MazeCfg(
             robot_id = i + 1,
-            start_x  = 2.25 + dx,  start_y = -3.25,
-            goal_x   = 4.25 + dx,  goal_y  = -3.25,
-            x_min    = 1.85 + dx,  x_max   = 4.65 + dx,
-            y_min    = -4.65,      y_max   = -1.85,
+            start_x  = 2.25,
+            start_y  = -3.25 - dy,
+            goal_x   = 4.25,
+            goal_y   = -3.25 - dy,
+            x_min    = 1.85,
+            x_max    = 4.65,
+            y_min    = -4.65 - dy,
+            y_max    = -1.85 - dy,
         ))
     return configs
 
@@ -139,6 +143,7 @@ class Cfg:
     STEP_DT   = 0.10
     TELE_WAIT = 1.2
     PARK_Z    = -5.0
+    GOAL_R    = 0.15
 
     # Fitness v5 (distance-based)
     START_DIST = 2.0
@@ -881,7 +886,4 @@ Examples:
 
 if __name__ == "__main__":
     main()
-    args = ap.parse_args()
-
-if __name__ == "__main__":
-    main()
+    # args = ap.parse_args()

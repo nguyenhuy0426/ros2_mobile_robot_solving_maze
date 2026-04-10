@@ -80,15 +80,22 @@ echo ""
 echo -e "${GREEN}[1/3]${NC} Tạo SDF và spawn ${YELLOW}${N}${NC} robot(s) song song..."
 
 declare -a SPAWN_PIDS=()
+
+DY_STEP=3.5   # giống trong gen_multi_maze.py
+
 for i in $(seq 1 "$N"); do
     TMP_SDF="/tmp/robot_${i}.sdf"
     sed "s/ROBOT_ID/${i}/g" "$TEMPLATE" > "$TMP_SDF"
+
+    # 👉 tính vị trí riêng cho từng robot
+    OFFSET=$((i-1))
+    Y_i=$(echo "$Y + $OFFSET * $DY_STEP" | bc)
 
     ros2 run ros_gz_sim create \
         -world  "$WORLD"       \
         -file   "$TMP_SDF"     \
         -name   "robot_${i}"   \
-        -x "$X" -y "$Y" -z "$Z" \
+        -x "$X" -y "$Y_i" -z "$Z" \
         > "/tmp/spawn_log_${i}.txt" 2>&1 &
     SPAWN_PIDS+=($!)
     echo -e "  Spawning ${YELLOW}robot_${i}${NC} (PID ${SPAWN_PIDS[-1]})..."
