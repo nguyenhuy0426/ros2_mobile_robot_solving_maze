@@ -1,0 +1,46 @@
+{
+  "type_description_msg": {
+    "type_description": {
+      "type_name": "my_interfaces/msg/MyMsg",
+      "fields": [
+        {
+          "name": "name",
+          "type": {
+            "type_id": 17,
+            "capacity": 0,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        },
+        {
+          "name": "email",
+          "type": {
+            "type_id": 17,
+            "capacity": 0,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        },
+        {
+          "name": "mssv",
+          "type": {
+            "type_id": 8,
+            "capacity": 0,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        }
+      ]
+    },
+    "referenced_type_descriptions": []
+  },
+  "type_hashes": [
+    {
+      "type_name": "my_interfaces/msg/MyMsg",
+      "hash_string": "RIHS01_41d75ebcdb1337dc83c4ec29c9c40caa474360be82c32c8f51b1f21a40a3bbd7"
+    }
+  ]
+}

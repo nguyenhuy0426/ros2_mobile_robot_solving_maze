@@ -1,0 +1,7 @@
+[console_scripts]
+aw = my_pkg.robot_awsd:main
+client = my_pkg.client:main
+listener = my_pkg.subcribe:main
+server = my_pkg.server:main
+talker = my_pkg.publish:main
+turtle = my_pkg.turtle:main
