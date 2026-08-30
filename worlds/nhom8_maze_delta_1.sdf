@@ -1,0 +1,288 @@
+<?xml version="1.0" ?>
+<sdf version="1.10">
+<world name="nhom8_maze_delta_1">
+  <physics name="1ms" type="ignored">
+    <max_step_size>0.001</max_step_size>
+    <real_time_factor>1.0</real_time_factor>
+  </physics>
+  <plugin filename="gz-sim-physics-system"   name="gz::sim::systems::Physics"/>
+  <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+  <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+  <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+    <render_engine>ogre2</render_engine>
+  </plugin>
+
+  <light type="directional" name="sun">
+    <cast_shadows>true</cast_shadows>
+    <pose>0 0 10 0 0 0</pose>
+    <diffuse>1 1 1 1</diffuse>
+    <specular>0.5 0.5 0.5 1</specular>
+    <attenuation><range>1000</range><constant>0.9</constant>
+      <linear>0.01</linear><quadratic>0.001</quadratic></attenuation>
+    <direction>-0.5 0.1 -0.9</direction>
+  </light>
+
+  <model name="ground_plane">
+    <static>true</static>
+    <link name="link">
+      <collision name="collision">
+        <geometry><plane><normal>0 0 1</normal><size>50.0 50.0</size></plane></geometry>
+        <surface><friction><ode><mu>40</mu></ode></friction></surface>
+      </collision>
+      <visual name="visual">
+        <geometry><plane><normal>0 0 1</normal><size>50.0 50.0</size></plane></geometry>
+        <material>
+          <ambient>0.8 0.8 0.8 1</ambient><diffuse>0.8 0.8 0.8 1</diffuse>
+          <specular>0.8 0.8 0.8 1</specular>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!--  MAZE delta_1 (family delta)                -->
+  <!--  walls: 16   wall bbox (local): (-1.3399, -1.9243, 1.3567, 1.9228)   -->
+  <!--  openings: entrance=north@(0.495,1.923) hw=0.500  exit=south@(0.053,-1.924) hw=0.470   -->
+  <!--  start (local): (0.4101, 1.5757) yaw=-1.8185 rad  -->
+  <!--  placement center: (3.9650, -2.5350)   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+    <model name="wall_000">
+      <static>true</static>
+      <pose>3.523500 -0.625300 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.9460 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.9460 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_001">
+      <static>true</static>
+      <pose>4.470550 -2.151700 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.8179 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.8179 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_002">
+      <static>true</static>
+      <pose>3.123700 -4.446000 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.8626 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.8626 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_003">
+      <static>true</static>
+      <pose>4.870350 -4.446000 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7345 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7345 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_004">
+      <static>true</static>
+      <pose>5.098800 -1.059550 0.2000 0 0 -1.047164</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.8184 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.8184 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_005">
+      <static>true</static>
+      <pose>4.166450 -0.959650 0.2000 0 0 -1.065410</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7942 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7942 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_006">
+      <static>true</static>
+      <pose>5.088750 -2.555350 0.2000 0 0 -1.063840</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.9534 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.9534 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_007">
+      <static>true</static>
+      <pose>4.842100 -3.729150 0.2000 0 0 -1.082881</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.6532 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.6532 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_008">
+      <static>true</static>
+      <pose>2.867300 -1.747650 0.2000 0 0 -1.010998</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.9107 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.9107 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_009">
+      <static>true</static>
+      <pose>2.867050 -3.276300 0.2000 0 0 -1.010777</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.9110 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.9110 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_010">
+      <static>true</static>
+      <pose>5.059100 -3.309400 0.2000 0 0 0.944004</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.8954 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.8954 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_011">
+      <static>true</static>
+      <pose>5.080250 -1.776300 0.2000 0 0 1.049310</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.8959 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.8959 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_012">
+      <static>true</static>
+      <pose>3.724850 -4.111000 0.2000 0 0 1.066422</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7952 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7952 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_013">
+      <static>true</static>
+      <pose>3.088300 -3.728950 0.2000 0 0 1.082511</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.6538 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.6538 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_014">
+      <static>true</static>
+      <pose>3.051550 -2.192550 0.2000 0 0 1.038568</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.6792 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.6792 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_015">
+      <static>true</static>
+      <pose>2.849450 -0.999900 0.2000 0 0 1.047645</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.8949 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.8949 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="floor">
+      <static>true</static>
+      <pose>3.965000 -2.535000 -0.02 0 0 0</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>2.7966 3.9471 0.03</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>2.7966 3.9471 0.03</size></box></geometry>
+          <material><ambient>0.87 0.87 0.82 1</ambient><diffuse>0.87 0.87 0.82 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+</world>
+</sdf>
