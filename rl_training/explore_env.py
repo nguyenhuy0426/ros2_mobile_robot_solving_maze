@@ -146,7 +146,9 @@ class GazeboExploreEnv(gym.Env):
                  maze_names: Optional[List[str]] = None,
                  selection: Optional[str] = None,
                  world_name: Optional[str] = None,
-                 prebuild: bool = False):
+                 prebuild: bool = False,
+                 stall_limit: Optional[int] = None,
+                 roam_bonus: Optional[float] = None):
         super().__init__()
         self.robot_id = robot_id
 
@@ -199,13 +201,20 @@ class GazeboExploreEnv(gym.Env):
         self._collision_thresh = compute_collision_thresholds()
         self._stuck = StuckTracker(
             C.EXPL_STUCK_WINDOW, C.EXPL_STUCK_MIN_DISP, C.EXPL_STUCK_PENALTY)
+        self._stall_limit = (int(stall_limit) if stall_limit is not None
+                             else C.EXPL_STALL_LIMIT)
+        self._roam_bonus = (float(roam_bonus) if roam_bonus is not None
+                            else C.EXPL_ROAM_BONUS)
         self._stall = StallMonitor(
-            C.EXPL_STUCK_WINDOW, C.EXPL_STUCK_MIN_DISP, C.EXPL_STALL_LIMIT)
+            C.EXPL_STUCK_WINDOW, C.EXPL_STUCK_MIN_DISP, self._stall_limit)
         self._frames: deque = deque(maxlen=4)
 
         # Sensor state (guarded by _lock)
         self._lock = threading.Lock()
         self._scan: Optional[np.ndarray] = None
+        self._pending_action: Optional[np.ndarray] = None
+        self._send_seq0: Optional[Tuple[int, int]] = None
+        self._send_t = 0.0
         self._scan_seq = 0
         self._ray_angles: Optional[np.ndarray] = None
         self._pose_xy = self._spec.start_xy_world
@@ -214,6 +223,7 @@ class GazeboExploreEnv(gym.Env):
 
         # Episode state
         self._step_count = 0
+        self._stale_steps = 0
         self._phase = PHASE_EXPLORE
         self._prev_xy = self._spec.start_xy_world
         self._prev_exit_d: Optional[float] = None
@@ -339,6 +349,33 @@ class GazeboExploreEnv(gym.Env):
             f"No fresh /scan{self.robot_id} + pose within {timeout}s. "
             "Is Gazebo running (unpaused) and spawn_robot_explore.sh active?")
 
+    def _wait_fresh_step(self, timeout: float = 2.0) -> None:
+        """Wait for a NEW scan+pose pair, at least ``C.EXPL_DT`` wall time.
+
+        Gazebo's low real-time factor means the 10 Hz publishers lag the
+        wall clock; a fixed sleep would consume stale sensor data. This
+        polls for genuinely new data (seq-based) instead, but never waits
+        longer than ``timeout``: on timeout the step proceeds with the
+        current data and ``_stale_steps`` is incremented.
+        """
+        if self._send_seq0 is not None:
+            scan0, pose0 = self._send_seq0
+            start = self._send_t
+            self._send_seq0 = None
+        else:
+            with self._lock:
+                scan0, pose0 = self._scan_seq, self._pose_seq
+            start = time.monotonic()
+        deadline = start + timeout
+        while time.monotonic() < deadline:
+            with self._lock:
+                fresh = (self._scan_seq > scan0
+                         and self._pose_seq > pose0)
+            if fresh and time.monotonic() - start >= C.EXPL_DT:
+                return
+            time.sleep(0.005)
+        self._stale_steps += 1
+
     def _snapshot(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         with self._lock:
             if self._scan is None:
@@ -388,8 +425,27 @@ class GazeboExploreEnv(gym.Env):
                              * C.EXPL_W_MAX)
         return action
 
+    def pre_send(self, action: np.ndarray) -> None:
+        """Publish this step's wheel command WITHOUT waiting for sensors.
+
+        Lets a vec-env issue every robot's command back-to-back so each one
+        integrates for a single control period. Stepping N envs sequentially
+        instead leaves each command active for N control periods (the other
+        envs' blocking sensor waits), so per-step travel scales with N.
+        The freshness baseline is latched here, at send time, so the paired
+        ``step()`` still consumes a scan taken AFTER the command.
+        """
+        with self._lock:
+            self._send_seq0 = (self._scan_seq, self._pose_seq)
+        self._send_t = time.monotonic()
+        self._pending_action = self._apply_action(action)
+
+    def hold(self) -> None:
+        """Zero the wheels so a latched command stops accumulating travel."""
+        self._stop_wheels()
+
     def _stop_wheels(self) -> None:
-        self._publish_wheels(np.zeros(2))
+        self._publish_wheels(np.zeros(len(self._wheel_pubs)))
 
     def _teleport_start(self) -> None:
         sx, sy = self._spec.start_xy_world
@@ -446,6 +502,8 @@ class GazeboExploreEnv(gym.Env):
               options: Optional[Dict[str, Any]] = None
               ) -> Tuple[np.ndarray, Dict[str, Any]]:
         super().reset(seed=seed)
+        self._pending_action = None
+        self._send_seq0 = None
         if seed is not None:
             self._rng = random.Random(seed)
 
@@ -493,8 +551,11 @@ class GazeboExploreEnv(gym.Env):
 
     def step(self, action: np.ndarray
              ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
-        action = self._apply_action(action)
-        time.sleep(C.EXPL_DT)
+        if self._pending_action is not None:
+            action, self._pending_action = self._pending_action, None
+        else:
+            action = self._apply_action(action)
+        self._wait_fresh_step()
         scan, xy, yaw = self._snapshot()
         self._step_count += 1
 
@@ -568,7 +629,7 @@ class GazeboExploreEnv(gym.Env):
             # earns nothing (paired with the stall rule below, standing or
             # crawling can never be the safe choice).
             if front_clear >= C.EXPL_SAFE_CLEAR:
-                reward += C.EXPL_ROAM_BONUS * speed
+                reward += self._roam_bonus * speed
             # Anti-stall: immediate penalty, then hard termination — standing
             # still must never be the discounted-safe alternative to acting.
             stuck_pen = self._stuck.update(xy)
@@ -606,8 +667,11 @@ def make_explore_env(robot_id: int = 1, seed: Optional[int] = None,
                      maze_names: Optional[List[str]] = None,
                      selection: Optional[str] = None,
                      world_name: Optional[str] = None,
-                     prebuild: bool = False) -> GazeboExploreEnv:
+                     prebuild: bool = False,
+                     stall_limit: Optional[int] = None,
+                     roam_bonus: Optional[float] = None) -> GazeboExploreEnv:
     """Factory shared by training and evaluation scripts."""
     return GazeboExploreEnv(robot_id=robot_id, seed=seed,
                             maze_names=maze_names, selection=selection,
-                            world_name=world_name, prebuild=prebuild)
+                            world_name=world_name, prebuild=prebuild,
+                            stall_limit=stall_limit, roam_bonus=roam_bonus)
