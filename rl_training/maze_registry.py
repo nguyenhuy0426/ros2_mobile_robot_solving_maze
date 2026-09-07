@@ -542,6 +542,33 @@ def multi_placement(names=None) -> Dict[str, Tuple[float, float]]:
     }
 
 
+def maze_at_world(xy, names=None, margin: float = 0.0
+                  ) -> Optional[str]:
+    """Name of the maze whose footprint contains world point ``xy``.
+
+    The combined world spaces its slots wider than a footprint, so the
+    bounding boxes are disjoint and a point resolves to at most one maze;
+    a point in the gap between slots returns ``None``.
+
+    ``margin`` inflates every bbox before the test. It exists because the
+    poses worth labelling most are the ones just OUTSIDE a wall — an
+    out_of_bounds death sits a few cm past the border, and a status view
+    that goes blank exactly when the robot dies is useless. ``names``
+    restricts the search to a subset (e.g. one robot's own group).
+    """
+    placements = multi_placement()
+    if names is not None:
+        placements = {n: placements[n] for n in names if n in placements}
+    registry = load_registry()
+    x, y = float(xy[0]), float(xy[1])
+    for name, center in placements.items():
+        x0, y0, x1, y1 = registry[name].place_at(center).wall_bbox_world
+        if (x0 - margin <= x <= x1 + margin
+                and y0 - margin <= y <= y1 + margin):
+            return name
+    return None
+
+
 def standalone_world_name(name: str) -> str:
     """World name of the standalone per-maze world (e.g. nhom8_maze_sigma_1)."""
     return f"nhom8_maze_{name}"
