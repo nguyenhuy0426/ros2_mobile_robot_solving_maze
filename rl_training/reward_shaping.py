@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from typing import Deque, Set, Tuple
+from typing import Deque, FrozenSet, Optional, Set, Tuple
 
 import numpy as np
 
@@ -176,6 +176,16 @@ class ZoneCoverage:
     def n_zones(self) -> int:
         return self._n_zones
 
+    @property
+    def visited(self) -> FrozenSet[int]:
+        """Zones already ticked off, as an immutable snapshot.
+
+        The EXPLORE shaping needs the COMPLEMENT of this set to pick the
+        nearest unvisited zone; handing out the live set would let a caller
+        mark zones visited without paying the bonus.
+        """
+        return frozenset(self._visited)
+
 
 class StallMonitor:
     """Hard stop for a robot that stops moving.
@@ -225,3 +235,48 @@ def action_smoothness_penalty(action, prev_action, scale: float) -> float:
 
     delta = np.asarray(action, dtype=float) - np.asarray(prev_action, dtype=float)
     return float(scale) * float(np.linalg.norm(delta))
+
+
+def action_rate_penalty(prev: Tuple[float, float], cmd: Tuple[float, float],
+                        scale: float) -> float:
+    """Quadratic cost on the per-step change of the (forward, turn) command.
+
+    The SQUARED form matters, and is why this is not
+    :func:`action_smoothness_penalty` with different arguments. An L2-norm
+    penalty is linear in |da|, so it charges a gentle mid-corridor correction
+    at the same rate per unit as a full command reversal, and the cheapest
+    response is to stop steering at all. Squaring makes small corrections
+    almost free and a saw-tooth reversal expensive — "hold a heading, then
+    commit to the turn", which is what the operator means by smooth.
+
+    It is measured on the command AFTER the slew limiter, so it prices what
+    the wheels actually did, and it is what makes the limiter more than a
+    cosmetic filter: a policy that saturates the rate cap every step still
+    weaves at the cap, and nothing in the v8 reward ever charged it for that.
+    """
+    df = float(cmd[0]) - float(prev[0])
+    dt = float(cmd[1]) - float(prev[1])
+    return float(scale) * (df * df + dt * dt)
+
+
+def zone_approach_shaping(prev_d: Optional[float], d: float, scale: float,
+                          retargeted: bool) -> float:
+    """Potential-based shaping on the distance to the nearest UNVISITED zone.
+
+    Same non-discounted Ng et al. form the EXIT leg uses — ``scale · (prev −
+    now)`` — telescoping over an episode so oscillating in place cannot farm
+    it. The one addition is ``retargeted``: when a zone is ticked off, the
+    target becomes the NEXT zone out and the distance jumps upward by metres,
+    which would charge a large negative on the very step that earns
+    EXPL_R_CELL. That step re-baselines instead of being scored, exactly as
+    ``_prev_exit_d`` is re-baselined at the EXPLORE→EXIT switch.
+
+    Returns 0.0 whenever there is nothing meaningful to compare: the first
+    step of an episode (``prev_d is None``), a retarget, or a non-finite
+    distance (a zone sealed off at the inflation radius).
+    """
+    if retargeted or prev_d is None or d is None:
+        return 0.0
+    if not (math.isfinite(prev_d) and math.isfinite(d)):
+        return 0.0
+    return float(scale) * (float(prev_d) - float(d))

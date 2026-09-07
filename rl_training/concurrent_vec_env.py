@@ -41,16 +41,27 @@ class ConcurrentVecEnv(DummyVecEnv):
         command, so the fleet is held still across the reset window.
         """
         obs_list = [None] * self.num_envs
-        for i in range(self.num_envs):
-            obs, self.buf_rews[i], terminated, truncated, self.buf_infos[i] = (
-                self.envs[i].step(self.actions[i]))
-            self.buf_dones[i] = terminated or truncated
-            self.buf_infos[i]["TimeLimit.truncated"] = truncated and not terminated
-            obs_list[i] = obs
-
-        if self.buf_dones.any():
+        try:
+            for i in range(self.num_envs):
+                obs, self.buf_rews[i], terminated, truncated, self.buf_infos[i] = (
+                    self.envs[i].step(self.actions[i]))
+                # Stop THIS robot the moment its own control period closes.
+                # Holding the whole fleet only after the last env returned
+                # leaves every early finisher driving through its slower
+                # peers' sensor waits, so per-step travel still grew with N:
+                # measured 1.6 cm at N=1, 2.1 cm at N=4, 4.9 cm at N=8.
+                self.envs[i].unwrapped.hold()
+                self.buf_dones[i] = terminated or truncated
+                self.buf_infos[i]["TimeLimit.truncated"] = truncated and not terminated
+                obs_list[i] = obs
+        finally:
+            # SAC updates, callbacks and resets all run outside the control
+            # interval. Their variable latency must not extend wheel commands.
+            # Also stop the fleet immediately if any sensor wait fails.
             for env in self.envs:
                 env.unwrapped.hold()
+
+        if self.buf_dones.any():
             for i in range(self.num_envs):
                 if self.buf_dones[i]:
                     self.buf_infos[i]["terminal_observation"] = obs_list[i]

@@ -228,6 +228,27 @@ def test_exit_crossed_and_oob(registry, name):
     assert not MR.out_of_bounds(spec, (cx, cy))
 
 
+@pytest.mark.parametrize("name", ["delta_1", "ortho_1", "sigma_1"])
+def test_leaving_through_the_exit_is_never_scored_out_of_bounds(registry, name):
+    """A winning exit move must not be reachable as a -30 death.
+
+    explore_env tests exit_crossed before out_of_bounds, so the two
+    thresholds must not straddle: any point that is already out of bounds
+    inside the exit gap has to count as crossed. When out_of_bounds used a
+    tighter eps than exit_crossed, the 3 cm band between them turned the
+    final step of a successful run into EXPL_R_COLLISION.
+    """
+    spec = registry[name]
+    exit_ = spec.exit_opening
+    _bx0, by0, _bx1, _by1 = spec.wall_bbox_world
+    gx = exit_.xy_local[0] + spec.placement_offset[0]
+    for depth in np.arange(0.0, 0.31, 0.005):
+        xy = (gx, by0 - float(depth))
+        if MR.out_of_bounds(spec, xy):
+            assert MR.exit_crossed(spec, exit_, xy), \
+                f"{name}: y={by0 - depth:.3f} is OOB but not yet exited"
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # Zone coverage tracker
 # ══════════════════════════════════════════════════════════════════════════
@@ -351,3 +372,101 @@ def test_distance_fields_reachable(registry):
         d = field.distance(*spec.start_xy_world)
         assert math.isfinite(d), f"{name}: d(start) not finite"
         assert d >= 1.0, f"{name}: d(start)={d:.3f} < 1.0"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Entrance seal + spawn clearance
+# ══════════════════════════════════════════════════════════════════════════
+
+def _simulated_scan(walls, px, py, yaw):
+    """Analytic 36-ray lidar scan of an OBB wall set (slab ray/OBB test).
+
+    (px, py) is the ROBOT pose; rays leave from the lidar mount LIDAR_X_OFF
+    ahead of it, because that is where compute_collision_thresholds() measures
+    its ray-to-chassis distances from. Ray i points at yaw + i*(2pi/36) and
+    ranges are clipped to [LIDAR_MIN, LIDAR_MAX], so the result can be
+    compared against those thresholds exactly like a live scan is.
+    """
+    px, py = px + C.LIDAR_X_OFF * math.cos(yaw), py + C.LIDAR_X_OFF * math.sin(yaw)
+    n = C.N_RAYS
+    out = np.full(n, C.LIDAR_MAX, dtype=np.float64)
+    for i in range(n):
+        th = yaw + i * (2.0 * math.pi / n)
+        dx, dy = math.cos(th), math.sin(th)
+        best = C.LIDAR_MAX
+        for w in walls:
+            c, s = math.cos(w.yaw), math.sin(w.yaw)
+            ox, oy = px - w.cx, py - w.cy
+            lx, ly = c * ox + s * oy, -s * ox + c * oy
+            rx, ry = c * dx + s * dy, -s * dx + c * dy
+            t0, t1, hit = 0.0, best, True
+            for o, r, h in ((lx, rx, w.half_length),
+                            (ly, ry, w.half_thickness)):
+                if abs(r) < 1e-12:
+                    if abs(o) > h:
+                        hit = False
+                        break
+                    continue
+                a, b = (-h - o) / r, (h - o) / r
+                t0, t1 = max(t0, min(a, b)), min(t1, max(a, b))
+                if t0 > t1:
+                    hit = False
+                    break
+            if hit:
+                best = t0
+        out[i] = max(best, C.LIDAR_MIN)
+    return out
+
+
+def test_entrance_gap_is_walled_shut(registry):
+    """The only border opening is the exit gap (CLAUDE.md geometry invariant).
+
+    An open entrance is not a harmless hole. The robot spawns facing it, no
+    lidar ray ever fires across it (there is nothing there to reflect), and
+    driving out through it terminated the episode at -30 as out_of_bounds:
+    11 of 17 logged episodes (65%) died that way, after a median 72 steps
+    versus 368 for a genuine wall collision.
+    """
+    for name in _names(registry):
+        spec = registry[name]
+        entrance = next(op for op in spec.openings if op.role == "entrance")
+        ex, ey = entrance.xy_local
+        span = np.linspace(-entrance.half_width, entrance.half_width, 41)
+        xs, ys = ex + span, np.full(span.shape, ey)
+        covered = np.zeros(span.shape, dtype=bool)
+        for w in spec.walls_local:
+            covered |= w.contains_array(xs, ys)
+        assert covered.all(), \
+            f"{name}: entrance mouth at ({ex:.3f}, {ey:.3f}) is not walled shut"
+
+
+def test_spawn_pose_clears_every_wall_by_the_collision_model(registry):
+    """Sealing the entrance moves a wall right in front of some spawns.
+
+    delta_1/delta_2 start only 0.147 m from the north border, and the rear
+    collision threshold is 0.26 m, so an unnudged spawn scores an instant
+    -30 collision on step 0. The spawn pose must clear every wall under the
+    SAME per-ray test the env terminates on.
+    """
+    from rl_training.wheel_env import compute_collision_thresholds
+    thresh = compute_collision_thresholds()
+    for name in _names(registry):
+        spec = registry[name]
+        sx, sy = spec.start_xy_world
+        scan = _simulated_scan(spec.walls_world, sx, sy, spec.start_yaw)
+        slack = (scan - thresh).min()
+        assert slack > 0.0, \
+            f"{name}: spawn slack {slack:+.3f} m — collides on step 0"
+
+
+def test_zone_start_matches_the_spawn_pose(registry):
+    """zone_start is the zone the robot actually spawns in.
+
+    It is decoded from the PNG before any spawn adjustment, so a moved start
+    silently desynchronizes it from reality and the coverage tracker credits
+    the wrong first zone.
+    """
+    for name in _names(registry):
+        spec = registry[name]
+        assert spec.zone_label_at_world(*spec.start_xy_world) == \
+            spec.zone_start, f"{name}: zone_start out of sync with the start"

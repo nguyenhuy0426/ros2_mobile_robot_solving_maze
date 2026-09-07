@@ -89,12 +89,12 @@ def compute_collision_thresholds(n_rays: int = C.N_RAYS,
                                  margin: float = C.COLLISION_MARGIN) -> np.ndarray:
     """Per-ray range below which the rectangular chassis touches a wall.
 
-    Same geometry as GazeboMazeEnv (chassis 0.26x0.20 m, lidar mounted at
+    Same geometry as GazeboMazeEnv (chassis 0.26x0.155 m, lidar mounted at
     x=+0.08): for each ray angle, distance from the lidar to the chassis
     boundary along that ray, plus a safety margin.
     """
-    L, W = 0.26, 0.20
-    x_off = 0.08
+    L, W = C.CHASSIS_L, C.CHASSIS_W   # one_robot.sdf box size (was 0.20: wrong)
+    x_off = C.LIDAR_X_OFF
     x_lo, x_hi = -L / 2 - x_off, L / 2 - x_off
     y_lo, y_hi = -W / 2, W / 2
 

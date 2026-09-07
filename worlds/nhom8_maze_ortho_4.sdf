@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <sdf version="1.10">
 <world name="nhom8_maze_ortho_4">
-  <physics name="1ms" type="ignored">
-    <max_step_size>0.001</max_step_size>
+  <physics name="8ms" type="ignored">
+    <max_step_size>0.008</max_step_size>
     <real_time_factor>1.0</real_time_factor>
   </physics>
   <plugin filename="gz-sim-physics-system"   name="gz::sim::systems::Physics"/>
@@ -41,7 +41,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE ortho_4 (family ortho)                -->
-  <!--  walls: 34   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
+  <!--  walls: 35   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
   <!--  openings: entrance=north@(0.003,1.933) hw=0.367  exit=south@(0.003,-1.933) hw=0.367   -->
   <!--  start (local): (-0.0076, 1.5924) yaw=-1.5725 rad  -->
   <!--  placement center: (3.9650, -2.5350)   -->
@@ -518,6 +518,20 @@
         </collision>
         <visual name="vis">
           <geometry><box><size>0.7971 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_034">
+      <static>true</static>
+      <pose>3.968400 -0.602400 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
           <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
         </visual>
       </link>

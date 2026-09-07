@@ -43,7 +43,7 @@ import subprocess
 import threading
 import time
 from collections import deque
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -61,6 +61,12 @@ from rl_training import maze_registry as MR
 from rl_training.reward_shaping import (
     StallMonitor,
     StuckTracker,
+    action_rate_penalty,
+    zone_approach_shaping,
+)
+from rl_training.zone_field import (
+    ZoneDistanceFields,
+    descent_direction,
 )
 from rl_training.wheel_env import (
     WHEEL_ORDER,
@@ -98,6 +104,389 @@ def safe_speed_penalty(front_clear: float, speed: float,
     if front_clear >= thresh:
         return 0.0
     return float(scale) * abs(speed) * (1.0 - front_clear / thresh)
+
+
+def safety_action_scale(min_slack: float, margin: float,
+                        floor: float = 0.35) -> float:
+    """Throttle wheel commands near any chassis collision ray.
+
+    Open space keeps the new higher speed. Near a wall, the command is reduced
+    before integration so the safety reward does not have to learn collision
+    avoidance entirely from terminal failures. ``floor`` preserves turning
+    authority and prevents a zero-action deadlock.
+    """
+    if margin <= 0.0 or min_slack >= margin:
+        return 1.0
+    ratio = max(0.0, float(min_slack) / float(margin))
+    return float(floor + (1.0 - floor) * ratio)
+
+
+def map_explore_action(action: np.ndarray,
+                       mode: Optional[str] = None) -> np.ndarray:
+    """Map the 2-D policy action to a normalized ``[left, right]`` command.
+
+    ``"wheels"`` is the v4-v6 mapping: the action IS the pair of wheel
+    commands, symmetric on [-1, 1].
+
+    ``"twist"`` (v7 default) splits the action into (forward, turn) and
+    squashes the forward channel onto ``[-EXPL_REVERSE_FRAC, 1]``. The
+    motivation is measured, not stylistic: 79.6% of the terminal contacts in
+    the 2026-09-06 run were rear rays, because the lidar sits 0.08 m ahead of
+    a 0.26 m chassis and so the rear collision threshold is 0.26 m against
+    0.10 m at the front. A high-entropy SAC policy on a symmetric wheel space
+    commands full reverse about a quarter of the time and dies in ~4 control
+    steps. Under "twist" a zero action drifts FORWARD, full forward authority
+    is retained, and reverse is capped at what a dead-end back-out needs.
+    """
+    a = np.clip(np.asarray(action, dtype=np.float32), -1.0, 1.0)
+    mode = C.EXPL_ACTION_MODE if mode is None else mode
+    if mode == "wheels":
+        return a
+    if mode != "twist":
+        raise ValueError(f"unknown EXPL_ACTION_MODE {mode!r}")
+    rev = float(C.EXPL_REVERSE_FRAC)
+    fwd = 0.5 * (1.0 + rev) * float(a[0]) + 0.5 * (1.0 - rev)
+    turn = float(C.EXPL_TURN_MAX) * float(a[1])
+    out = np.array([fwd - turn, fwd + turn], dtype=np.float32)
+    # Saturate by scaling, not clipping. Clipping only the wheel that
+    # overflows changes the differential, so a commanded pivot silently
+    # becomes a forward lurch; dividing both wheels preserves the arc the
+    # policy asked for and only slows it down.
+    peak = float(np.abs(out).max())
+    if peak > 1.0:
+        out /= peak
+    return out
+
+
+def unmap_explore_action(fwd: float, turn: float,
+                         mode: Optional[str] = None) -> np.ndarray:
+    """Exact inverse of :func:`map_explore_action` — (forward, turn) → action.
+
+    The scripted demonstrator thinks in "drive forward this hard, arc this
+    hard", but every transition it writes into the replay buffer has to carry
+    the action the POLICY would have emitted. Under "twist" the forward
+    channel is squashed onto [-EXPL_REVERSE_FRAC, 1], so writing a raw
+    forward command straight into the action slot would train the critic on a
+    different robot than the one that moved.
+
+    ``fwd`` outside [-EXPL_REVERSE_FRAC, 1] (or ``turn`` beyond
+    ±EXPL_TURN_MAX) clips, so the demonstrator can ask for full speed without
+    knowing the mapping's limits.
+    """
+    mode = C.EXPL_ACTION_MODE if mode is None else mode
+    if mode == "wheels":
+        return np.clip(np.array([fwd, turn], dtype=np.float32), -1.0, 1.0)
+    if mode != "twist":
+        raise ValueError(f"unknown EXPL_ACTION_MODE {mode!r}")
+    rev = float(C.EXPL_REVERSE_FRAC)
+    a0 = (float(fwd) - 0.5 * (1.0 - rev)) / (0.5 * (1.0 + rev))
+    a1 = float(turn) / float(C.EXPL_TURN_MAX)
+    return np.clip(np.array([a0, a1], dtype=np.float32), -1.0, 1.0)
+
+
+def steer_to_heading(ux: float, uy: float, yaw: float,
+                     mode: Optional[str] = None) -> np.ndarray:
+    """Turn a desired world heading into a policy action.
+
+    Proportional on the wrapped bearing error, saturating at a quarter turn,
+    with the forward channel gated by ``cos(err)`` clamped at zero: aligned →
+    full speed, broadside → pure pivot, behind → pivot the short way round
+    rather than reversing (reverse is what killed 79.6% of the v6 episodes,
+    since the rear collision threshold is 0.26 m against 0.10 m at the front).
+    """
+    err = math.atan2(uy, ux) - yaw
+    err = math.atan2(math.sin(err), math.cos(err))     # wrap to [-pi, pi]
+    turn = float(np.clip(err / (math.pi / 2.0), -1.0, 1.0)) * C.EXPL_TURN_MAX
+    fwd = max(0.0, math.cos(err))
+    return unmap_explore_action(fwd, turn, mode)
+
+
+class SimUnresponsiveError(RuntimeError):
+    """The simulator stopped honouring teleports and cannot be trained on.
+
+    Raised by :meth:`ExploreEnv.reset` when the robot is still nowhere near
+    its requested start after ``EXPL_TELEPORT_TRIES`` attempts. It is a hard
+    failure ON PURPOSE: the previous behaviour — warn and continue — fed SB3
+    a stale pose that scored an instant -30 out-of-bounds terminal, and 1059
+    of those in one campaign drove mean coverage from 0.35 to 0.00. Crashing
+    costs one supervisor restart; continuing costs the policy.
+    """
+
+
+def teleport_landed(target_xy: Tuple[float, float],
+                    observed_xy: Tuple[float, float],
+                    tol: float = C.EXPL_TELEPORT_TOL) -> bool:
+    """Did the robot actually arrive where ``set_pose`` was asked to put it?
+
+    The service returns success as soon as the request is *accepted*, which
+    tells us nothing about whether the server ever applied it — a hung server
+    accepts and never moves. Comparing the pose we read back against the pose
+    we asked for is the only check that distinguishes the two.
+    """
+    dx = float(observed_xy[0]) - float(target_xy[0])
+    dy = float(observed_xy[1]) - float(target_xy[1])
+    return math.hypot(dx, dy) <= float(tol)
+
+
+def episode_step_limit(exit_entered_at: Optional[int],
+                       max_steps: int = C.EXPL_MAX_STEPS,
+                       exit_budget: int = C.EXPL_EXIT_BUDGET) -> int:
+    """Step cap for this episode, given when (if ever) PHASE_EXIT began.
+
+    ``max`` rather than a plain sum: an episode that maps the maze in 200
+    steps already has budget in hand, and ``exit_entered_at + exit_budget``
+    would truncate it early — the opposite of the intent. The extension only
+    ever helps the episode that spent its whole budget exploring.
+    """
+    if exit_entered_at is None:
+        return int(max_steps)
+    return int(max(max_steps, exit_entered_at + exit_budget))
+
+
+def twist_of_wheels(wheels: np.ndarray) -> Tuple[float, float]:
+    """``[left, right]`` -> ``(forward, turn)``; inverse of the pairing above."""
+    w = np.asarray(wheels, dtype=np.float32)
+    return 0.5 * float(w[0] + w[1]), 0.5 * float(w[1] - w[0])
+
+
+def wheels_of_twist(fwd: float, turn: float) -> np.ndarray:
+    """``(forward, turn)`` -> ``[left, right]``, saturated by SCALING.
+
+    Clipping only the wheel that overflows changes the differential, so a
+    commanded pivot silently becomes a forward lurch; dividing both wheels
+    preserves the arc and only slows it down.
+    """
+    out = np.array([fwd - turn, fwd + turn], dtype=np.float32)
+    peak = float(np.abs(out).max())
+    if peak > 1.0:
+        out /= peak
+    return out
+
+
+def slew_limit(prev: Tuple[float, float], cmd: Tuple[float, float],
+               fwd_rate: float = C.EXPL_FWD_RATE,
+               turn_rate: float = C.EXPL_TURN_RATE) -> Tuple[float, float]:
+    """Cap how far the (forward, turn) command may move in one control step.
+
+    SAC draws an INDEPENDENT sample every 100 ms, so on an identical
+    observation two consecutive turn commands measured 0.33 apart on average
+    (p90 1.10) and flipped sign on 17% of steps — 9 deg of heading per step
+    from noise alone at the v8 EXPL_TURN_MAX, 30 deg at the p90. That is the
+    weave the operator sees on a straight corridor, and no amount of training
+    removes it: it is the policy's entropy, which EXPL_TARGET_ENTROPY
+    deliberately keeps high.
+
+    A rate cap is not a low-pass filter and does not fight a decisive policy:
+    the full turn range is still reachable in ``1/turn_rate`` steps (5 at the
+    default), which is all a junction needs. What it cannot do is reverse the
+    heading every 100 ms, because that requires the policy to hold the same
+    opinion for consecutive steps — exactly what uncorrelated noise cannot.
+
+    The limiter state (``prev``) is deliberately NOT added to the
+    observation: doing so would change EXPL_STATE_DIM and orphan every
+    existing checkpoint. The residual partial observability is small — the
+    4-frame lidar stack already carries the recent motion — and is paid for
+    by the action-rate penalty, which is what actually teaches the policy to
+    stop asking for reversals.
+    """
+    pf, pt = float(prev[0]), float(prev[1])
+    cf, ct = float(cmd[0]), float(cmd[1])
+    fwd = pf + float(np.clip(cf - pf, -fwd_rate, fwd_rate))
+    turn = pt + float(np.clip(ct - pt, -turn_rate, turn_rate))
+    return fwd, turn
+
+
+def rotation_lookahead_slack(scan: np.ndarray, threshold: np.ndarray,
+                            turn: float,
+                            steps: float = C.EXPL_SHIELD_LOOKAHEAD
+                            ) -> np.ndarray:
+    """Slack each return will have after ``steps`` of the commanded yaw.
+
+    The collision threshold is a function of BEARING, not a radius: 0.100 m
+    at the nose, 0.127 m at the flank, 0.260 m astern, because the lidar sits
+    LIDAR_X_OFF forward of the chassis centre. It steps by 0.0685 m between
+    the 150 deg and 160 deg rays, where a ray stops striking the side of the
+    chassis rectangle and starts striking its rear face. A stationary
+    obstacle therefore loses 0.0685 m of slack for every 10 deg the robot
+    yaws, having never moved -- and at EXPL_TURN_MAX the chassis yaws
+    13.8 deg per control step, so a spin burns 0.094 m of slack per step
+    against a 0.18 m trigger. Measured on the scan alone, the danger arrives
+    1.9 steps before contact; predicted from the command, it arrives in time
+    to be acted on.
+
+    A body yaw of psi carries a fixed return from bearing b to b - psi, so
+    the threshold it will be judged against is tau(b - psi). Range is left
+    alone: for a lidar at the centre of rotation a pure yaw does not change
+    it, and the translation component is already covered by the cone bands.
+
+    Returned elementwise with the CURRENT slack so the guard can only ever be
+    pessimistic -- a command whose rotation opens the scan up must not be
+    credited with slack the robot does not have yet.
+    """
+    scan = np.asarray(scan, dtype=np.float32)
+    threshold = np.asarray(threshold, dtype=np.float32)
+    n = scan.size
+    if n == 0 or threshold.size != n:
+        return np.zeros(0, dtype=np.float32)
+    slack = scan - threshold
+    if float(steps) <= 0.0 or float(turn) == 0.0:
+        return slack
+    rim = C.EXPL_W_MAX * C.WHEEL_RADIUS
+    psi = math.degrees(2.0 * float(turn) * rim / C.WHEEL_SEP) \
+        * C.EXPL_DT * float(steps)
+    deg = np.arange(n, dtype=np.float32) * (360.0 / n)
+    tau_next = np.interp((deg - psi) % 360.0,
+                         np.append(deg, 360.0),
+                         np.append(threshold, threshold[0]))
+    return np.minimum(slack, scan - tau_next.astype(np.float32))
+
+
+def explore_shield(wheels: np.ndarray, scan: np.ndarray,
+                   collision_thresh: np.ndarray,
+                   cone_deg: float = C.EXPL_SHIELD_CONE,
+                   slow: float = C.EXPL_SHIELD_SLOW,
+                   turn_at: float = C.EXPL_SHIELD_TURN,
+                   floor: float = C.EXPL_SHIELD_FLOOR,
+                   turn_strength: float = C.EXPL_ESCAPE_TURN,
+                   engaged: bool = False,
+                   release_at: float = C.EXPL_SHIELD_RELEASE,
+                   rot_margin: float = C.EXPL_SHIELD_ROT_MARGIN
+                   ) -> Tuple[np.ndarray, float, bool]:
+    """Throttle, then override, a wheel command that is driving into a wall.
+
+    Returns ``(wheels, scale, overridden)``.
+
+    Two bands on the slack of the cone the chassis is actually moving into
+    (front when the command drives forward, rear when it reverses):
+
+      * ``slack < slow``    — the forward component is throttled, the turn
+        component is preserved so the policy keeps steering authority;
+      * ``slack < turn_at`` — the command is replaced by an in-place turn
+        toward the side with more clearance. Once that override is
+        ``engaged`` it holds until the slack recovers past ``release_at``
+        (v9 hysteresis): a single threshold makes the command chatter
+        between full forward and a pivot at 10 Hz on the lidar noise alone,
+        which is half of the stutter the operator reported. ``engaged`` is
+        the ``overridden`` flag returned by the previous call.
+
+    The THROTTLE band watches a cone rather than the global minimum slack,
+    and that still matters: centred in a 0.75 m corridor the flank slack is
+    0.248 m, so throttling on the global minimum would hold the robot at
+    walking pace down every corridor in the maze.
+
+    Both bands are blind where the robot actually dies, though. Over the 355
+    collisions of the v9 run that survived the teleport bug the breaching ray
+    was FRONT on 1% (REAR 34%, LEFT 34%, RIGHT 30%), so a cone watches the one
+    sector the robot almost never hits. Widening it is not the answer: a
+    global slack threshold big enough to give a spin room to stop fires on 84%
+    of collision-free maze poses even with a straight command, because the
+    0.260 m rear threshold puts an ordinary wall astern permanently inside it.
+
+    So the third rule (v10) is a VETO on the ROTATION, not a wider band. The
+    threshold is a function of bearing and steps by 0.0685 m between the
+    150 deg and 160 deg rays, so a stationary obstacle loses that much slack
+    for every 10 deg the robot yaws; at EXPL_TURN_MAX the chassis yaws
+    13.8 deg per step, i.e. it burns 0.094 m per step while the scan alone
+    reports the danger 1.9 steps before contact. ``rotation_lookahead_slack``
+    rotates the threshold curve by the yaw the command is ASKING for, and if
+    that leaves less than ``rot_margin`` anywhere on the scan the command is
+    refused. Because the prediction is direction-aware the refusal is cheap:
+    when the opposite turn is clear the shield MIRRORS the turn and the robot
+    keeps driving at its commanded speed -- 9.7 of every 9.8 points of added
+    firing, measured across the 13 mazes -- and only a command with no safe
+    rotation left reaches the escape.
+
+    The cone band edges are the ones a scripted probe survived 500 steps on
+    delta_1 with,
+    reaching 6/25 zones at R = +44.8 where the learned policy managed 39
+    steps, 1.5/25 and R = -27. The v6 trigger (0.06 m global slack) fired
+    1.2 control steps before contact at 0.48 m/s — too late to change the
+    outcome, which is why it never appeared in the outcome mix.
+    """
+    wheels = np.clip(np.asarray(wheels, dtype=np.float32), -1.0, 1.0)
+    scan = np.asarray(scan, dtype=np.float32)
+    threshold = np.asarray(collision_thresh, dtype=np.float32)
+    if scan.size == 0 or threshold.size != scan.size or wheels.size != 2:
+        return wheels, 1.0, False
+
+    slack = scan - threshold
+    n = scan.size
+    deg = np.arange(n, dtype=np.float32) * (360.0 / n)
+    rel = (deg + 180.0) % 360.0 - 180.0          # (-180, 180]
+    fwd = 0.5 * float(wheels[0] + wheels[1])
+    diff = 0.5 * float(wheels[1] - wheels[0])
+
+    centre = 0.0 if fwd >= 0.0 else 180.0
+    cone = np.abs((rel - centre + 180.0) % 360.0 - 180.0) <= float(cone_deg)
+    cone_slack = float(slack[cone].min()) if cone.any() else float(slack.min())
+
+    trip = release_at if engaged else turn_at
+    # The veto is evaluated first but applied last: a front wall inside the
+    # cone band still owns the step, because mirroring the turn would leave
+    # the forward channel driving into it.
+    vetoed = float(rotation_lookahead_slack(scan, threshold, diff).min()) \
+        <= float(rot_margin)
+    mirrorable = vetoed and diff != 0.0 and float(
+        rotation_lookahead_slack(scan, threshold, -diff).min()) > \
+        float(rot_margin)
+
+    if cone_slack > trip and not vetoed:
+        if cone_slack >= slow:
+            return wheels, 1.0, False
+        scale = safety_action_scale(cone_slack - turn_at, slow - turn_at,
+                                    floor)
+        out = np.array([fwd * scale - diff, fwd * scale + diff],
+                       dtype=np.float32)
+        return np.clip(out, -1.0, 1.0), scale, False
+
+    if cone_slack > trip and mirrorable:
+        scale = 1.0 if cone_slack >= slow else safety_action_scale(
+            cone_slack - turn_at, slow - turn_at, floor)
+        out = np.array([fwd * scale + diff, fwd * scale - diff],
+                       dtype=np.float32)
+        return np.clip(out, -1.0, 1.0), scale, True
+
+    left = np.abs(rel - 90.0) <= 60.0
+    right = np.abs(rel + 90.0) <= 60.0
+    left_clear = float(slack[left].min()) if left.any() else float("inf")
+    right_clear = float(slack[right].min()) if right.any() else float("inf")
+    turn = float(np.clip(turn_strength, 0.2, 1.0))
+    if left_clear < right_clear:
+        turn = -turn
+
+    # Arc away rather than spin in place when there is room ahead. The lidar
+    # is mounted 0.08 m off the rotation centre, so a pure in-place turn
+    # ORBITS it by up to 0.16 m without moving the chassis: with a wall
+    # behind, that drives a rear ray further in. Every scripted-probe death
+    # on ortho_1 and sigma_1 was a 160-200 deg ray for exactly this reason.
+    # Creeping forward while turning moves the whole chassis off the wall.
+    # ...but when the front is ALSO tight the old fallback was base = 0.0,
+    # i.e. exactly the in-place spin the paragraph above warns about. That
+    # fallback is where the deaths are: over the 446 v9 episodes that
+    # survived the teleport bug, the ray that breached at the moment of
+    # death was REAR on 44% of sigma collisions, 27% of ortho and 16% of
+    # delta, against 1-2% FRONT everywhere. Sigma is worst because only 19
+    # of its 69 walls are axis-aligned (the rest sit at 52-65 deg), so an
+    # oblique surface behind the robot is the normal case rather than the
+    # exception.
+    #
+    # Translating off the wall beats rotating on it whichever end is open,
+    # so pick the direction from the clearances instead of assuming forward:
+    # creep forward when the front is clear, creep BACK when only the rear
+    # is, and keep the pure rotation for the genuinely boxed-in case where
+    # there is nothing else left.
+    front = np.abs(rel) <= float(cone_deg)
+    rear = np.abs(np.abs(rel) - 180.0) <= float(cone_deg)
+    front_slack = float(slack[front].min()) if front.any() else float("-inf")
+    rear_slack = float(slack[rear].min()) if rear.any() else float("-inf")
+    if front_slack > turn_at:
+        base = floor
+    elif rear_slack > turn_at:
+        base = -floor
+    else:
+        base = 0.0
+    out = np.array([base - turn, base + turn], dtype=np.float32)
+    return np.clip(out, -1.0, 1.0), abs(base), True
 
 
 def build_explore_obs(frames: deque, odom: np.ndarray,
@@ -148,7 +537,8 @@ class GazeboExploreEnv(gym.Env):
                  world_name: Optional[str] = None,
                  prebuild: bool = False,
                  stall_limit: Optional[int] = None,
-                 roam_bonus: Optional[float] = None):
+                 roam_bonus: Optional[float] = None,
+                 action_mode: Optional[str] = None):
         super().__init__()
         self.robot_id = robot_id
 
@@ -207,12 +597,24 @@ class GazeboExploreEnv(gym.Env):
                             else C.EXPL_ROAM_BONUS)
         self._stall = StallMonitor(
             C.EXPL_STUCK_WINDOW, C.EXPL_STUCK_MIN_DISP, self._stall_limit)
+        self._action_mode = (str(action_mode) if action_mode is not None
+                             else C.EXPL_ACTION_MODE)
+        self._shield_streak = 0
         self._frames: deque = deque(maxlen=4)
 
         # Sensor state (guarded by _lock)
         self._lock = threading.Lock()
         self._scan: Optional[np.ndarray] = None
         self._pending_action: Optional[np.ndarray] = None
+        self._last_action_scale = 1.0
+        self._last_safety_override = False
+        # v9 slew-limiter state: the (forward, turn) actually commanded last
+        # step, and the change the limiter allowed (priced by the reward).
+        # Step on which PHASE_EXIT began, or None while still exploring;
+        # episode_step_limit turns it into this episode's step cap.
+        self._exit_entered_at: Optional[int] = None
+        self._prev_twist: Tuple[float, float] = (0.0, 0.0)
+        self._twist_delta: Tuple[float, float] = (0.0, 0.0)
         self._send_seq0: Optional[Tuple[int, int]] = None
         self._send_t = 0.0
         self._scan_seq = 0
@@ -227,6 +629,8 @@ class GazeboExploreEnv(gym.Env):
         self._phase = PHASE_EXPLORE
         self._prev_xy = self._spec.start_xy_world
         self._prev_exit_d: Optional[float] = None
+        self._prev_zone_d: Optional[float] = None
+        self._zone_target = -1
         self._ep_idx = 0
 
         if not rclpy.ok():
@@ -255,7 +659,10 @@ class GazeboExploreEnv(gym.Env):
         self._map_pub = self.node.create_publisher(
             OccupancyGrid, "/map", map_qos)
 
-        self.executor = MultiThreadedExecutor(num_threads=2)
+        # One callback worker per robot is enough: callbacks only update a
+        # small locked sensor snapshot. Two workers per env created 26 DDS
+        # executor threads for the 13-robot trainer and collapsed Gazebo RTF.
+        self.executor = MultiThreadedExecutor(num_threads=1)
         self.executor.add_node(self.node)
         self._spin_thread = threading.Thread(
             target=self.executor.spin, daemon=True)
@@ -278,6 +685,10 @@ class GazeboExploreEnv(gym.Env):
                 "field": MR.build_distance_field(spec),
                 "mapper": MR.build_mapper(spec),
                 "zone": MR.build_zone_coverage(spec),
+                # "zone_fields" is filled in on first use: 25 Dijkstras cost
+                # ~1 s and 3 MB per maze, and prebuild=True would otherwise
+                # pay that for every maze in the group before the first step.
+                "zone_fields": None,
             }
             self._bundles[name] = bundle
         return bundle
@@ -307,6 +718,18 @@ class GazeboExploreEnv(gym.Env):
     def _field(self):
         """Geodesic distance-to-exit field of the current maze."""
         return self._bundle["field"]
+
+    @property
+    def _zone_fields(self) -> ZoneDistanceFields:
+        """Per-zone geodesic fields of the current maze (built on first use)."""
+        fields = self._bundle["zone_fields"]
+        if fields is None:
+            fields = ZoneDistanceFields.from_spec(self._bundle["spec"])
+            self._bundle["zone_fields"] = fields
+        return fields
+
+    def _unvisited(self) -> FrozenSet[int]:
+        return frozenset(range(self._zone.n_zones)) - self._zone.visited
 
     # ── ROS callbacks ────────────────────────────────────────────
 
@@ -349,15 +772,17 @@ class GazeboExploreEnv(gym.Env):
             f"No fresh /scan{self.robot_id} + pose within {timeout}s. "
             "Is Gazebo running (unpaused) and spawn_robot_explore.sh active?")
 
-    def _wait_fresh_step(self, timeout: float = 2.0) -> None:
+    def _wait_fresh_step(self, timeout: Optional[float] = None) -> None:
         """Wait for a NEW scan+pose pair, at least ``C.EXPL_DT`` wall time.
 
         Gazebo's low real-time factor means the 10 Hz publishers lag the
         wall clock; a fixed sleep would consume stale sensor data. This
         polls for genuinely new data (seq-based) instead, but never waits
-        longer than ``timeout``: on timeout the step proceeds with the
-        current data and ``_stale_steps`` is incremented.
+        longer than ``timeout``. A timeout stops this robot and aborts the
+        step so stale observations never enter the replay buffer.
         """
+        timeout = (C.EXPL_SENSOR_TIMEOUT if timeout is None
+                   else float(timeout))
         if self._send_seq0 is not None:
             scan0, pose0 = self._send_seq0
             start = self._send_t
@@ -375,6 +800,10 @@ class GazeboExploreEnv(gym.Env):
                 return
             time.sleep(0.005)
         self._stale_steps += 1
+        self._stop_wheels()
+        raise RuntimeError(
+            f"robot_{self.robot_id}: no fresh scan+pose within {timeout}s; "
+            "stopped instead of training on stale sensors")
 
     def _snapshot(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         with self._lock:
@@ -421,9 +850,31 @@ class GazeboExploreEnv(gym.Env):
 
     def _apply_action(self, action: np.ndarray) -> np.ndarray:
         action = np.clip(np.asarray(action, dtype=np.float32), -1.0, 1.0)
-        self._publish_wheels(map_wheel_action(action, diff_drive=True)
+        with self._lock:
+            scan = self._scan.copy() if self._scan is not None else None
+        wheels = map_explore_action(action, self._action_mode)
+        # v9: rate-limit the (forward, turn) command before anything else
+        # touches it. SAC resamples both channels i.i.d. every control step,
+        # which on its own swung the heading 9 deg per step (p90 30 deg) and
+        # reversed the turn on 17% of steps — the weave seen in Gazebo.
+        prev = self._prev_twist
+        twist = slew_limit(prev, twist_of_wheels(wheels))
+        self._twist_delta = (twist[0] - prev[0], twist[1] - prev[1])
+        wheels = wheels_of_twist(*twist)
+        if scan is None:
+            self._last_action_scale = 1.0
+            self._last_safety_override = False
+        else:
+            wheels, self._last_action_scale, self._last_safety_override = (
+                explore_shield(wheels, scan, self._collision_thresh,
+                               engaged=self._last_safety_override))
+        # Track what the WHEELS were actually given, shield included, so the
+        # limiter ramps from the real state rather than from a command the
+        # shield overrode — otherwise every shield release is a step change.
+        self._prev_twist = twist_of_wheels(wheels)
+        self._publish_wheels(map_wheel_action(wheels, diff_drive=True)
                              * C.EXPL_W_MAX)
-        return action
+        return wheels
 
     def pre_send(self, action: np.ndarray) -> None:
         """Publish this step's wheel command WITHOUT waiting for sensors.
@@ -521,21 +972,51 @@ class GazeboExploreEnv(gym.Env):
                 self._selection)
             self._set_maze(name)
 
-        self._stop_wheels()
-        self._teleport_start()
-        time.sleep(C.EXPL_SETTLE_SEC)
-        self._wait_fresh()
-
-        scan, xy, yaw = self._snapshot()
+        # Verify the teleport actually took. `set_pose` reports success on
+        # ACCEPTING the request, so a hung server answers OK and never moves
+        # the robot; reset would then hand back the stale pose as a legal
+        # start and the next step would score an instant -30 out-of-bounds
+        # terminal straight into the replay buffer. Measured: 100% of the
+        # out_of_bounds deaths in both campaigns were exactly this, never a
+        # real escape (ep_len == 1, pose 7-15 m outside every maze).
+        target = self._spec.start_xy_world
+        for attempt in range(C.EXPL_TELEPORT_TRIES):
+            self._stop_wheels()
+            self._teleport_start()
+            time.sleep(C.EXPL_SETTLE_SEC)
+            self._wait_fresh()
+            scan, xy, yaw = self._snapshot()
+            if teleport_landed(target, xy):
+                break
+            self.node.get_logger().warn(
+                f"robot_{self.robot_id}: teleport to {self._maze_name} "
+                f"did not take (asked {target}, got {xy}) — "
+                f"attempt {attempt + 1}/{C.EXPL_TELEPORT_TRIES}")
+        else:
+            raise SimUnresponsiveError(
+                f"robot_{self.robot_id}: {C.EXPL_TELEPORT_TRIES} teleports to "
+                f"{self._maze_name} at {target} all left the robot at {xy}. "
+                f"The Gazebo server is accepting set_pose without applying "
+                f"it — restart the simulator rather than training on this.")
         self._frames.clear()
         self._mapper.reset()
         self._zone.reset(xy)
         self._stuck.reset(xy)
         self._stall.reset(xy)
+        self._shield_streak = 0
+        # The robot is teleported and stationary, so the limiter must ramp
+        # from a standstill; carrying the last episode's command over would
+        # charge the first step of the new episode for a phantom reversal.
+        self._prev_twist = (0.0, 0.0)
+        self._twist_delta = (0.0, 0.0)
+        self._last_safety_override = False
         self._step_count = 0
         self._phase = PHASE_EXPLORE
+        self._exit_entered_at = None
         self._prev_xy = xy
         self._prev_exit_d = None
+        self._prev_zone_d = None
+        self._zone_target = -1
         self._ep_idx += 1
         self._publish_map()
 
@@ -569,7 +1050,11 @@ class GazeboExploreEnv(gym.Env):
         ray_angles = self._ray_angles_or_default()
         min_scan = float(scan.min())
         front_clear = front_clearance(scan, ray_angles)
-        collided = bool(np.any(scan < self._collision_thresh))
+        # Per-ray margin to the termination test; min < 0 IS the collision
+        # condition (identical to np.any(scan < thresh)). The margin and its
+        # arg-min are logged so deaths can be attributed to a ray direction.
+        slack = scan - self._collision_thresh
+        collided = bool(slack.min() < 0.0)
 
         # Boundary classification: exit opening vs. elsewhere (registry-
         # driven; per-maze opening + placement).
@@ -579,10 +1064,16 @@ class GazeboExploreEnv(gym.Env):
         info: Dict[str, Any] = {
             "maze": self._maze_name,
             "pos": xy, "phase": self._phase, "min_scan": min_scan,
+            "yaw": yaw,
+            "action_scale": self._last_action_scale,
+            "safety_override": self._last_safety_override,
             "speed": speed, "front_clear": front_clear,
             "coverage_cells": self._zone.n_cells,
             "coverage_frac": self._zone.n_cells / float(self._zone.n_zones),
             "map_pct": self._mapper.coverage(),
+            "min_slack": float(slack.min()),
+            "danger_ray": int(np.argmin(slack)),
+            "ep_len": self._step_count,
         }
 
         reward = C.EXPL_R_TIME
@@ -613,35 +1104,83 @@ class GazeboExploreEnv(gym.Env):
                 if (self._zone.n_cells >= self._zone.n_zones
                         and self._phase == PHASE_EXPLORE):
                     self._phase = PHASE_EXIT
+                    self._exit_entered_at = self._step_count
                     info["phase"] = self._phase
                     info["map_complete"] = True
                     reward += C.EXPL_R_MAP_DONE
                     self._prev_exit_d = self._field.distance(*xy)
+            # EXPLORE phase: potential-based shaping on the geodesic
+            # distance to the NEAREST UNVISITED zone. Without it the only
+            # signal pointing at an unexplored zone is the +8 collected on
+            # arrival, discounted by 0.997^(steps away) and worth nothing at
+            # all until the agent blunders into the zone by chance — which is
+            # why 240 episodes produced 1.5/25 zones. The target-change guard
+            # skips the step on which the distance jumps discontinuously
+            # (a zone was ticked off); a mere tie-flip between two equidistant
+            # zones is continuous, so skipping it costs nothing either.
+            if self._phase == PHASE_EXPLORE:
+                target, zone_d = self._zone_fields.nearest(
+                    xy[0], xy[1], self._unvisited())
+                reward += zone_approach_shaping(
+                    self._prev_zone_d, zone_d, C.EXPL_ZONE_POT_SCALE,
+                    retargeted=(target != self._zone_target))
+                self._prev_zone_d, self._zone_target = zone_d, target
+                info["zone_target"] = target
+                info["zone_dist"] = zone_d
             # EXIT phase: potential-based shaping on geodesic distance
             if self._phase == PHASE_EXIT and self._prev_exit_d is not None:
                 d = self._field.distance(*xy)
                 reward += C.EXPL_EXIT_POT_SCALE * (self._prev_exit_d - d)
                 self._prev_exit_d = d
-            # "Slow down near a wall ahead" rule
+            # "Slow down near a wall" rule. v6: the gate is min per-ray
+            # slack, not front clearance — 87.4% of deaths come from the
+            # side/rear rays that front_clearance cannot see, and it is the
+            # SAME quantity the termination test uses (slack.min() < 0), so
+            # the dense penalty now warns about the actual failure mode.
+            safety = max(float(slack.min()), 0.0)
             reward += safe_speed_penalty(
-                front_clear, speed, C.EXPL_SAFE_CLEAR, C.EXPL_SAFE_SPEED_SCALE)
+                safety, speed, C.EXPL_SAFE_MARGIN, C.EXPL_SAFE_SPEED_SCALE)
             # Bold-roaming bonus: brisk motion in open space earns; creeping
             # earns nothing (paired with the stall rule below, standing or
             # crawling can never be the safe choice).
-            if front_clear >= C.EXPL_SAFE_CLEAR:
+            if safety >= C.EXPL_SAFE_MARGIN:
                 reward += self._roam_bonus * speed
+            # v9: price the per-step command change. The slew limiter caps
+            # how fast the wheels may move, but a policy that saturates the
+            # cap every step still weaves at the cap; this is what makes
+            # holding a heading strictly better than sawing across it.
+            reward += action_rate_penalty((0.0, 0.0), self._twist_delta,
+                                          C.EXPL_R_SMOOTH)
             # Anti-stall: immediate penalty, then hard termination — standing
             # still must never be the discounted-safe alternative to acting.
             stuck_pen = self._stuck.update(xy)
             reward += stuck_pen
             info["stuck"] = bool(stuck_pen < 0.0)
-            if self._stall.update(xy):
+            # v7: an in-place shield turn is a legitimate manoeuvre, not a
+            # stall. StallMonitor measures NET displacement over a 20-step
+            # window, so it kills a robot that is rotating to find an
+            # opening: the scripted probe lost a 6/25-zone episode that way
+            # at step 333. The streak cap keeps "hide inside the shield
+            # forever" from becoming the optimal policy.
+            if self._last_safety_override:
+                # Freeze the monitor while the shield drives; re-seed its
+                # window on release so a stale pre-override position cannot
+                # fire a spurious stall on the very next step.
+                self._shield_streak += 1
+                stalled = self._shield_streak >= C.EXPL_SHIELD_STREAK
+            else:
+                if self._shield_streak:
+                    self._stall.reset(xy)
+                self._shield_streak = 0
+                stalled = self._stall.update(xy)
+            if stalled:
                 reward += C.EXPL_R_COLLISION
                 terminated = True
                 info["stall"] = True
 
         truncated = False
-        if not terminated and self._step_count >= C.EXPL_MAX_STEPS:
+        limit = episode_step_limit(self._exit_entered_at)
+        if not terminated and self._step_count >= limit:
             truncated = True
             info["timeout"] = True
 
@@ -649,11 +1188,38 @@ class GazeboExploreEnv(gym.Env):
             self._publish_map()
 
         obs = self._stack_obs(scan, xy, yaw)
+        info["coverage_cells"] = self._zone.n_cells
+        info["coverage_frac"] = self._zone.n_cells / float(self._zone.n_zones)
         self._prev_xy = xy
         if terminated or truncated:
             self._stop_wheels()
             self._save_map()
         return obs, float(reward), terminated, truncated, info
+
+    def scripted_action(self) -> np.ndarray:
+        """Demonstrator action: steer down the ACTIVE geodesic field.
+
+        EXPLORE heads for the nearest unvisited zone, EXIT for the opening.
+        Nothing here runs inside the learning loop — the CLAUDE.md pure-RL
+        mandate keeps planners opt-in, and this is reached only through
+        ``--bootstrap-scripted``, which seeds the replay buffer before
+        training starts (SACfD) and is never consulted again. Safety is not
+        this function's job: the returned action goes through
+        ``_apply_action`` -> ``explore_shield`` like any policy action.
+        """
+        with self._lock:
+            (x, y), yaw = self._pose_xy, self._pose_yaw
+        if self._phase == PHASE_EXIT:
+            ux, uy = descent_direction(self._field.dist, self._field.origin,
+                                       self._field.res, x, y)
+        else:
+            target, _ = self._zone_fields.nearest(x, y, self._unvisited())
+            ux, uy = self._zone_fields.descent_direction(target, x, y)
+        if ux == 0.0 and uy == 0.0:
+            # No finite cell on the search rim (deep inside the inflation
+            # band). Drive straight and let the shield sort it out.
+            return unmap_explore_action(1.0, 0.0, self._action_mode)
+        return steer_to_heading(ux, uy, yaw, self._action_mode)
 
     def close(self) -> None:
         try:
@@ -669,9 +1235,11 @@ def make_explore_env(robot_id: int = 1, seed: Optional[int] = None,
                      world_name: Optional[str] = None,
                      prebuild: bool = False,
                      stall_limit: Optional[int] = None,
-                     roam_bonus: Optional[float] = None) -> GazeboExploreEnv:
+                     roam_bonus: Optional[float] = None,
+                     action_mode: Optional[str] = None) -> GazeboExploreEnv:
     """Factory shared by training and evaluation scripts."""
     return GazeboExploreEnv(robot_id=robot_id, seed=seed,
                             maze_names=maze_names, selection=selection,
                             world_name=world_name, prebuild=prebuild,
-                            stall_limit=stall_limit, roam_bonus=roam_bonus)
+                            stall_limit=stall_limit, roam_bonus=roam_bonus,
+                            action_mode=action_mode)

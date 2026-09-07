@@ -49,10 +49,14 @@ from rl_training.maze_field import MazeDistanceField, Wall, wall_from_segment
 from rl_training.occ_map import OccupancyGridMapper
 from rl_training.reward_shaping import ZoneCoverage
 
-N_ZONES = 25
+N_ZONES = C.EXPL_N_ZONES
 WALL_T = C.EXPL_WALL_T          # 0.03
 ROBOT_R = C.ROBOT_RADIUS        # 0.10
 PLAN_INFLATE = ROBOT_R + 0.06   # 0.16 — decode-time planning inflation
+
+SPAWN_STEP = 0.01               # start-nudge search step (m)
+SPAWN_CLEARANCE = 0.05          # extra advance past the first collision-free pose
+SPAWN_MAX_NUDGE = 0.50          # give up rather than push the start out of its cell
 
 
 @dataclass(frozen=True)
@@ -187,12 +191,17 @@ def _maze_from_json(path, center_xy) -> MazeSpec:
         openings.append(Opening(role=op["role"], xy_local=(gx, gy),
                                 border=border, half_width=half_width))
 
+    # The decoded PNG has no wall across the entrance, but the maze contract
+    # is "the only border opening is the exit gap" — see entrance_seal_wall.
+    walls_local += tuple(entrance_seal_wall(op) for op in openings
+                         if op.role == "entrance")
+
     shape = data["zone_labels_shape"]              # [ny, nx]
     labels = np.frombuffer(
         zlib.decompress(base64.b64decode(data["zone_labels_b64"])),
         dtype=np.int16).reshape(shape[0], shape[1])
 
-    return MazeSpec(
+    spec = MazeSpec(
         name=data["name"],
         family=data["family"],
         walls_local=walls_local,
@@ -207,7 +216,93 @@ def _maze_from_json(path, center_xy) -> MazeSpec:
                                    for c in data["zone_centroids"]),
         zone_start=int(data["zone_start"]),
         placement_offset=(0.0, 0.0),
-    ).place_at(center_xy)
+    )
+    return _with_clear_start(spec).place_at(center_xy)
+
+
+def entrance_seal_wall(opening: Opening) -> Wall:
+    """Wall that plugs an entrance gap, flush with the border it sits on.
+
+    The decoder leaves the entrance open because that is what the source PNG
+    shows, but an open border is not a harmless hole: the robot spawns facing
+    it, no lidar ray fires across it (nothing is there to reflect), and
+    driving out scored -30 as ``out_of_bounds`` — 65% of all logged episode
+    deaths. Sealing it restores the documented invariant that the exit gap is
+    the only opening.
+
+    The plug is CENTERED on the gap mouth and collinear with the perimeter
+    walls, so it is flush with its neighbours: ``wall_bbox`` is built from
+    wall CENTERLINES, so perimeter walls straddle the bbox line by ±WALL_T/2
+    and a centered plug does the same. It also keeps the plug center inside
+    the bbox, which is what ``generate_maze_sdf_multi.verify_sdf_file`` uses
+    to select a maze's own walls out of the combined world. ``half_length``
+    overlaps each neighbour by WALL_T so the two butt joints cannot leak.
+    """
+    ox, oy = opening.xy_local
+    yaw = 0.0 if opening.border in ("north", "south") else math.pi / 2.0
+    return Wall(cx=ox, cy=oy, half_length=opening.half_width + WALL_T,
+                half_thickness=WALL_T / 2.0, yaw=yaw)
+
+
+def _obb_overlap(c1, half1, yaw1, c2, half2, yaw2) -> bool:
+    """Separating-axis test between two oriented boxes (half extents)."""
+    ax1 = (math.cos(yaw1), math.sin(yaw1))
+    ay1 = (-ax1[1], ax1[0])
+    ax2 = (math.cos(yaw2), math.sin(yaw2))
+    ay2 = (-ax2[1], ax2[0])
+    dx, dy = c2[0] - c1[0], c2[1] - c1[1]
+    for ax, ay in ((ax1[0], ax1[1]), (ay1[0], ay1[1]),
+                   (ax2[0], ax2[1]), (ay2[0], ay2[1])):
+        r1 = (half1[0] * abs(ax * ax1[0] + ay * ax1[1])
+              + half1[1] * abs(ax * ay1[0] + ay * ay1[1]))
+        r2 = (half2[0] * abs(ax * ax2[0] + ay * ax2[1])
+              + half2[1] * abs(ax * ay2[0] + ay * ay2[1]))
+        if abs(dx * ax + dy * ay) > r1 + r2:
+            return False
+    return True
+
+
+def _with_clear_start(spec: MazeSpec) -> MazeSpec:
+    """Copy of ``spec`` whose start pose clears every wall, zone_start resynced.
+
+    The decoder places the start 0.25–0.7 m (geodesic) from the entrance gap,
+    which for delta_1/delta_2 is only 0.147 m of straight-line room behind the
+    robot. Once the entrance is plugged that wall is inside the rear collision
+    threshold (0.26 m, versus 0.10 m at the front), so the episode would
+    terminate at -30 on step 0. Advance the start along its own heading until
+    the chassis — grown by ``COLLISION_MARGIN``, i.e. the box the env actually
+    terminates on — clears every wall, then a further ``SPAWN_CLEARANCE`` so
+    the pose is not merely marginal.
+
+    Moving the start can move it into a different watershed zone, so
+    ``zone_start`` is re-read from the label raster afterwards (a start that
+    lands on an unlabeled raster cell keeps the decoded value).
+    """
+    half = (C.CHASSIS_L / 2.0 + C.COLLISION_MARGIN,
+            C.CHASSIS_W / 2.0 + C.COLLISION_MARGIN)
+    ux, uy = math.cos(spec.start_yaw), math.sin(spec.start_yaw)
+    sx, sy = spec.start_xy_local
+
+    def clear(x, y) -> bool:
+        return not any(
+            _obb_overlap((x, y), half, spec.start_yaw,
+                         (w.cx, w.cy), (w.half_length, w.half_thickness), w.yaw)
+            for w in spec.walls_local)
+
+    advance = 0.0
+    while advance <= SPAWN_MAX_NUDGE and not clear(sx + ux * advance,
+                                                   sy + uy * advance):
+        advance += SPAWN_STEP
+    if advance > SPAWN_MAX_NUDGE:
+        raise ValueError(
+            f"{spec.name}: no collision-free start within "
+            f"{SPAWN_MAX_NUDGE:.2f} m along the start heading")
+    if advance > 0.0:
+        advance += SPAWN_CLEARANCE
+
+    moved = replace(spec, start_xy_local=(sx + ux * advance, sy + uy * advance))
+    zone = moved.zone_label_at_world(*moved.start_xy_world)
+    return moved if zone < 0 else replace(moved, zone_start=zone)
 
 
 def _opening_border(wall_bbox, gx: float, gy: float) -> str:
@@ -404,8 +499,16 @@ def exit_crossed(spec: MazeSpec, opening: Opening, xy_world,
     raise ValueError(f"unknown border: {opening.border!r}")
 
 
-def out_of_bounds(spec: MazeSpec, xy_world, eps: float = 0.02) -> bool:
-    """True when the point is outside the wall bbox grown by eps."""
+def out_of_bounds(spec: MazeSpec, xy_world, eps: float = 0.05) -> bool:
+    """True when the point is outside the wall bbox grown by eps.
+
+    ``eps`` MUST NOT be tighter than :func:`exit_crossed`'s: explore_env tests
+    exit_crossed first and falls through to out_of_bounds, so a tighter eps
+    here opens a band just past the border where a robot leaving through the
+    exit gap is already "out of bounds" but not yet "exited" — scoring the
+    winning move as an EXPL_R_COLLISION death. Every other border is walled
+    shut (see :func:`entrance_seal_wall`), so the looser bound costs nothing.
+    """
     bx0, by0, bx1, by1 = spec.wall_bbox_world
     x, y = xy_world
     return (x < bx0 - eps or x > bx1 + eps

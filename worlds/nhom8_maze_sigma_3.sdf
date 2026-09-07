@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <sdf version="1.10">
 <world name="nhom8_maze_sigma_3">
-  <physics name="1ms" type="ignored">
-    <max_step_size>0.001</max_step_size>
+  <physics name="8ms" type="ignored">
+    <max_step_size>0.008</max_step_size>
     <real_time_factor>1.0</real_time_factor>
   </physics>
   <plugin filename="gz-sim-physics-system"   name="gz::sim::systems::Physics"/>
@@ -41,7 +41,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE sigma_3 (family sigma)                -->
-  <!--  walls: 68   wall bbox (local): (-1.6473, -1.9402, 1.6479, 1.9489)   -->
+  <!--  walls: 69   wall bbox (local): (-1.6473, -1.9402, 1.6479, 1.9489)   -->
   <!--  openings: entrance=north@(0.003,1.594) hw=0.168  exit=south@(0.003,-1.937) hw=0.168   -->
   <!--  start (local): (-0.0223, 1.3348) yaw=-1.5724 rad  -->
   <!--  placement center: (3.9650, -2.5350)   -->
@@ -994,6 +994,20 @@
         </collision>
         <visual name="vis">
           <geometry><box><size>0.4086 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="wall_068">
+      <static>true</static>
+      <pose>3.967900 -0.940800 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
           <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
         </visual>
       </link>

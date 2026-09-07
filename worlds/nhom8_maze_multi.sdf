@@ -1,8 +1,8 @@
 <?xml version="1.0" ?>
 <sdf version="1.10">
 <world name="nhom8_maze_multi">
-  <physics name="1ms" type="ignored">
-    <max_step_size>0.001</max_step_size>
+  <physics name="8ms" type="ignored">
+    <max_step_size>0.008</max_step_size>
     <real_time_factor>1.0</real_time_factor>
   </physics>
   <plugin filename="gz-sim-physics-system"   name="gz::sim::systems::Physics"/>
@@ -41,9 +41,9 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE delta_1 (family delta)                -->
-  <!--  walls: 16   wall bbox (local): (-1.3399, -1.9243, 1.3567, 1.9228)   -->
+  <!--  walls: 17   wall bbox (local): (-1.3399, -1.9243, 1.3567, 1.9228)   -->
   <!--  openings: entrance=north@(0.495,1.923) hw=0.500  exit=south@(0.053,-1.924) hw=0.470   -->
-  <!--  start (local): (0.4101, 1.5757) yaw=-1.8185 rad  -->
+  <!--  start (local): (0.4782, 1.6497) yaw=-1.8185 rad  -->
   <!--  placement center: (-12.0000, -12.0000)   -->
   <!-- ═══════════════════════════════════════════════════════ -->
 
@@ -271,6 +271,20 @@
       </link>
     </model>
 
+    <model name="delta_1_wall_016">
+      <static>true</static>
+      <pose>-11.505100 -10.077200 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.0600 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.0600 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="delta_1_floor">
       <static>true</static>
       <pose>-12.000000 -12.000000 -0.02 0 0 0</pose>
@@ -287,9 +301,9 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE delta_2 (family delta)                -->
-  <!--  walls: 17   wall bbox (local): (-1.3396, -1.9244, 1.3565, 1.9228)   -->
+  <!--  walls: 18   wall bbox (local): (-1.3396, -1.9244, 1.3565, 1.9228)   -->
   <!--  openings: entrance=north@(0.495,1.923) hw=0.500  exit=south@(-0.049,-1.924) hw=0.470   -->
-  <!--  start (local): (0.4104, 1.5756) yaw=-1.8185 rad  -->
+  <!--  start (local): (0.4785, 1.6496) yaw=-1.8185 rad  -->
   <!--  placement center: (-4.0000, -12.0000)   -->
   <!-- ═══════════════════════════════════════════════════════ -->
 
@@ -531,6 +545,20 @@
       </link>
     </model>
 
+    <model name="delta_2_wall_017">
+      <static>true</static>
+      <pose>-3.505100 -10.077200 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>1.0600 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>1.0600 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="delta_2_floor">
       <static>true</static>
       <pose>-4.000000 -12.000000 -0.02 0 0 0</pose>
@@ -547,7 +575,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE ortho_1 (family ortho)                -->
-  <!--  walls: 34   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
+  <!--  walls: 35   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
   <!--  openings: entrance=north@(0.003,1.933) hw=0.367  exit=south@(0.003,-1.933) hw=0.367   -->
   <!--  start (local): (-0.0076, 1.5924) yaw=-1.5725 rad  -->
   <!--  placement center: (4.0000, -12.0000)   -->
@@ -1029,6 +1057,20 @@
       </link>
     </model>
 
+    <model name="ortho_1_wall_034">
+      <static>true</static>
+      <pose>4.003400 -10.067400 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="ortho_1_floor">
       <static>true</static>
       <pose>4.000000 -12.000000 -0.02 0 0 0</pose>
@@ -1045,7 +1087,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE ortho_2 (family ortho)                -->
-  <!--  walls: 34   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
+  <!--  walls: 35   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
   <!--  openings: entrance=north@(0.003,1.933) hw=0.367  exit=south@(0.003,-1.933) hw=0.367   -->
   <!--  start (local): (-0.0076, 1.5924) yaw=-1.5725 rad  -->
   <!--  placement center: (12.0000, -12.0000)   -->
@@ -1527,6 +1569,20 @@
       </link>
     </model>
 
+    <model name="ortho_2_wall_034">
+      <static>true</static>
+      <pose>12.003400 -10.067400 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="ortho_2_floor">
       <static>true</static>
       <pose>12.000000 -12.000000 -0.02 0 0 0</pose>
@@ -1543,7 +1599,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE ortho_3 (family ortho)                -->
-  <!--  walls: 34   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
+  <!--  walls: 35   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
   <!--  openings: entrance=north@(0.003,1.933) hw=0.367  exit=south@(0.003,-1.933) hw=0.367   -->
   <!--  start (local): (-0.0076, 1.5924) yaw=-1.5725 rad  -->
   <!--  placement center: (-12.0000, -4.0000)   -->
@@ -2025,6 +2081,20 @@
       </link>
     </model>
 
+    <model name="ortho_3_wall_034">
+      <static>true</static>
+      <pose>-11.996600 -2.067400 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="ortho_3_floor">
       <static>true</static>
       <pose>-12.000000 -4.000000 -0.02 0 0 0</pose>
@@ -2041,7 +2111,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE ortho_4 (family ortho)                -->
-  <!--  walls: 34   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
+  <!--  walls: 35   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
   <!--  openings: entrance=north@(0.003,1.933) hw=0.367  exit=south@(0.003,-1.933) hw=0.367   -->
   <!--  start (local): (-0.0076, 1.5924) yaw=-1.5725 rad  -->
   <!--  placement center: (-4.0000, -4.0000)   -->
@@ -2523,6 +2593,20 @@
       </link>
     </model>
 
+    <model name="ortho_4_wall_034">
+      <static>true</static>
+      <pose>-3.996600 -2.067400 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="ortho_4_floor">
       <static>true</static>
       <pose>-4.000000 -4.000000 -0.02 0 0 0</pose>
@@ -2539,7 +2623,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE ortho_5 (family ortho)                -->
-  <!--  walls: 34   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
+  <!--  walls: 35   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
   <!--  openings: entrance=north@(0.003,1.933) hw=0.367  exit=south@(0.003,-1.933) hw=0.367   -->
   <!--  start (local): (-0.0076, 1.5924) yaw=-1.5725 rad  -->
   <!--  placement center: (4.0000, -4.0000)   -->
@@ -3021,6 +3105,20 @@
       </link>
     </model>
 
+    <model name="ortho_5_wall_034">
+      <static>true</static>
+      <pose>4.003400 -2.067400 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="ortho_5_floor">
       <static>true</static>
       <pose>4.000000 -4.000000 -0.02 0 0 0</pose>
@@ -3037,7 +3135,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE ortho_6 (family ortho)                -->
-  <!--  walls: 34   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
+  <!--  walls: 35   wall bbox (local): (-1.9326, -1.9326, 1.9326, 1.9326)   -->
   <!--  openings: entrance=north@(0.003,1.933) hw=0.367  exit=south@(0.003,-1.933) hw=0.367   -->
   <!--  start (local): (-0.0076, 1.5924) yaw=-1.5725 rad  -->
   <!--  placement center: (12.0000, -4.0000)   -->
@@ -3519,6 +3617,20 @@
       </link>
     </model>
 
+    <model name="ortho_6_wall_034">
+      <static>true</static>
+      <pose>12.003400 -2.067400 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.7950 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="ortho_6_floor">
       <static>true</static>
       <pose>12.000000 -4.000000 -0.02 0 0 0</pose>
@@ -3535,7 +3647,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE sigma_1 (family sigma)                -->
-  <!--  walls: 68   wall bbox (local): (-1.6468, -1.9402, 1.6477, 1.9489)   -->
+  <!--  walls: 69   wall bbox (local): (-1.6468, -1.9402, 1.6477, 1.9489)   -->
   <!--  openings: entrance=north@(0.003,1.589) hw=0.168  exit=south@(0.003,-1.937) hw=0.168   -->
   <!--  start (local): (0.1032, 1.3098) yaw=-1.5724 rad  -->
   <!--  placement center: (-12.0000, 4.0000)   -->
@@ -4493,6 +4605,20 @@
       </link>
     </model>
 
+    <model name="sigma_1_wall_068">
+      <static>true</static>
+      <pose>-11.997100 5.588500 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="sigma_1_floor">
       <static>true</static>
       <pose>-12.000000 4.000000 -0.02 0 0 0</pose>
@@ -4509,7 +4635,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE sigma_2 (family sigma)                -->
-  <!--  walls: 68   wall bbox (local): (-1.6468, -1.9401, 1.648, 1.9489)   -->
+  <!--  walls: 69   wall bbox (local): (-1.6468, -1.9401, 1.648, 1.9489)   -->
   <!--  openings: entrance=north@(0.003,1.589) hw=0.168  exit=south@(0.003,-1.937) hw=0.168   -->
   <!--  start (local): (0.0032, 1.1599) yaw=-1.5722 rad  -->
   <!--  placement center: (-4.0000, 4.0000)   -->
@@ -5467,6 +5593,20 @@
       </link>
     </model>
 
+    <model name="sigma_2_wall_068">
+      <static>true</static>
+      <pose>-3.997100 5.588500 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="sigma_2_floor">
       <static>true</static>
       <pose>-4.000000 4.000000 -0.02 0 0 0</pose>
@@ -5483,7 +5623,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE sigma_3 (family sigma)                -->
-  <!--  walls: 68   wall bbox (local): (-1.6473, -1.9402, 1.6479, 1.9489)   -->
+  <!--  walls: 69   wall bbox (local): (-1.6473, -1.9402, 1.6479, 1.9489)   -->
   <!--  openings: entrance=north@(0.003,1.594) hw=0.168  exit=south@(0.003,-1.937) hw=0.168   -->
   <!--  start (local): (-0.0223, 1.3348) yaw=-1.5724 rad  -->
   <!--  placement center: (4.0000, 4.0000)   -->
@@ -6441,6 +6581,20 @@
       </link>
     </model>
 
+    <model name="sigma_3_wall_068">
+      <static>true</static>
+      <pose>4.002900 5.594200 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="sigma_3_floor">
       <static>true</static>
       <pose>4.000000 4.000000 -0.02 0 0 0</pose>
@@ -6457,7 +6611,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE sigma_4 (family sigma)                -->
-  <!--  walls: 68   wall bbox (local): (-1.6473, -1.9402, 1.6479, 1.9489)   -->
+  <!--  walls: 69   wall bbox (local): (-1.6473, -1.9402, 1.6479, 1.9489)   -->
   <!--  openings: entrance=north@(0.003,1.594) hw=0.168  exit=south@(0.003,-1.937) hw=0.168   -->
   <!--  start (local): (-0.0223, 1.3348) yaw=-1.5724 rad  -->
   <!--  placement center: (12.0000, 4.0000)   -->
@@ -7415,6 +7569,20 @@
       </link>
     </model>
 
+    <model name="sigma_4_wall_068">
+      <static>true</static>
+      <pose>12.002900 5.594200 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
     <model name="sigma_4_floor">
       <static>true</static>
       <pose>12.000000 4.000000 -0.02 0 0 0</pose>
@@ -7431,7 +7599,7 @@
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!--  MAZE sigma_5 (family sigma)                -->
-  <!--  walls: 68   wall bbox (local): (-1.6466, -1.9401, 1.6477, 1.9489)   -->
+  <!--  walls: 69   wall bbox (local): (-1.6466, -1.9401, 1.6477, 1.9489)   -->
   <!--  openings: entrance=north@(0.003,1.594) hw=0.168  exit=south@(0.003,-1.937) hw=0.168   -->
   <!--  start (local): (0.0034, 1.2599) yaw=-1.5722 rad  -->
   <!--  placement center: (-12.0000, 12.0000)   -->
@@ -8384,6 +8552,20 @@
         </collision>
         <visual name="vis">
           <geometry><box><size>0.4086 0.0300 0.4000</size></box></geometry>
+          <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="sigma_5_wall_068">
+      <static>true</static>
+      <pose>-11.997100 13.594200 0.2000 0 0 0.000000</pose>
+      <link name="link">
+        <collision name="col">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
+        </collision>
+        <visual name="vis">
+          <geometry><box><size>0.3966 0.0300 0.4000</size></box></geometry>
           <material><ambient>0.15 0.45 0.85 1</ambient><diffuse>0.15 0.45 0.85 1</diffuse></material>
         </visual>
       </link>

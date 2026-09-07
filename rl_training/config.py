@@ -12,12 +12,16 @@ from pathlib import Path
 # Robot geometry (matches Gazebo nhom8_mecanum)
 # ══════════════════════════════════════════════════════════════════════════
 ROBOT_RADIUS = 0.10       # effective collision radius (chassis 0.26×0.155m)
+CHASSIS_L    = 0.26       # one_robot.sdf box size, along +x
+CHASSIS_W    = 0.155      # one_robot.sdf box size, along +y
 WHEEL_RADIUS = 0.024
+WHEEL_SEP    = 0.18       # track width: wheel links at y = ±0.09 in one_robot.sdf
 
 # ══════════════════════════════════════════════════════════════════════════
 # Lidar
 # ══════════════════════════════════════════════════════════════════════════
 N_RAYS       = 36         # 360° / 10° = 36 rays
+LIDAR_X_OFF  = 0.08       # lidar mount, +x from the chassis center
 LIDAR_MAX    = 3.0        # max range (m)
 LIDAR_MIN    = 0.05       # min range (m)
 
@@ -163,7 +167,7 @@ START_XY       = (2.25, -3.25)    # cell (row 2, col 0) center
 GOAL_XY        = (4.25, -3.25)    # cell (row 2, col 4) center
 START_YAW      = 0.0
 
-WHEEL_W_MAX      = 15.0           # rad/s per wheel (rim ≈ 0.36 m/s at r=0.024)
+WHEEL_W_MAX      = 20.0           # rad/s per wheel (rim ≈ 0.48 m/s at r=0.024)
 WHEEL_ACTION_DIM = 4              # [fl, fr, rl, rr]
 WHEEL_FRAME_STACK = 4             # LiDAR temporal memory (POMDP workaround)
 WHEEL_STATE_DIM  = WHEEL_FRAME_STACK * N_RAYS   # 4*36 = 144
@@ -302,14 +306,47 @@ EXPL_WORLD_SDF  = WS_ROOT / "worlds" / "nhom8_maze75.sdf"
 EXPL_WORLD_NAME = "nhom8_maze75"
 
 # Robot control (same mecanum robot as v3: 2-DOF differential drive)
-EXPL_W_MAX      = 15.0        # rad/s per wheel (rim ≈ 0.36 m/s)
+EXPL_W_MAX      = 20.0        # rad/s per wheel (rim ≈ 0.48 m/s; +33%)
 EXPL_DT         = 0.10        # control period (s), 10 Hz lidar
+EXPL_SENSOR_TIMEOUT = 5.0     # tolerate low-RTF 13-robot Gazebo sensor bursts
 EXPL_SETTLE_SEC = 0.6
+
+# ── Teleport verification ────────────────────────────────────────────────
+# Reset teleports the robot to its maze start via the Gazebo `set_pose`
+# service. When that service stops answering (a hung server, not a dead one —
+# the watchdog's pgrep still sees the process) the old code logged a warning
+# and carried on, so `reset` returned the robot's STALE pose as a legal start
+# state and the next step scored an immediate -30 out-of-bounds terminal.
+# Measured across two campaigns: 112/993 (v8) and 1059/1503 (v9) episodes,
+# 100% of them ep_len == 1 with the terminal pose 7-15 m outside EVERY maze.
+# Those -30 terminals went straight into the replay buffer and collapsed the
+# policy (mean coverage 0.35 -> 0.00, mean ep_len 673 -> 1).
+#
+# Slots are 8 m apart, so the tolerance has to be far below that or a robot
+# that landed in the maze next door would be scored against a maze it is not
+# standing in. Settling jitter after a 0.6 s stationary settle is millimetres,
+# so 0.25 m is generous by two orders of magnitude and still 30x clear of the
+# nearest wrong answer.
+EXPL_TELEPORT_TOL   = 0.25    # m; |observed - requested| accepted as arrival
+EXPL_TELEPORT_TRIES = 3       # attempts before declaring the simulator dead
 EXPL_MAX_STEPS  = 1500        # 150 s: full coverage (~35 m) + exit leg
+# ...except that the budget turned out to be for coverage ALONE. v9 produced
+# the first 25/25 episode (ortho_3, R=+127.99) and it TIMED OUT: exploration
+# used all 1500 steps, so PHASE_EXIT started with nothing left and the robot
+# was truncated on the step it earned the right to leave.
+#
+# The fix is an extension granted only when coverage completes, not a bigger
+# EXPL_MAX_STEPS: raising the base would also stretch every failed
+# exploration episode, and with 4 robots sharing one simulator that is pure
+# throughput lost. At ~0.027 m of travel per step, 300 steps buys ~8 m of
+# corridor — comfortably more than the longest geodesic from anywhere in a
+# 5x5x0.75 m maze to its exit gap.
+EXPL_EXIT_BUDGET = 300        # extra steps granted on entering PHASE_EXIT
 
 # Observation: 4×36 LiDAR stack + odom [x, y, cos yaw, sin yaw]
 #              + coverage fraction + exit-phase flag  → 150 dims
 EXPL_STATE_DIM  = 4 * N_RAYS + 4 + 2
+EXPL_MEMORY_GRID = 5          # optional odometry visitation bitmap (25 features)
 
 # Reward — phase EXPLORE
 EXPL_R_CELL      = 8.0        # one-time bonus per newly visited cell (25 → +200)
@@ -318,16 +355,161 @@ EXPL_R_TIME      = -0.02      # per-step time penalty (standing still loses)
 EXPL_STUCK_WINDOW   = 20
 EXPL_STUCK_MIN_DISP = 0.08    # <8 cm net travel per 2 s window = not moving
 EXPL_STUCK_PENALTY  = -0.10
-EXPL_STALL_LIMIT    = 4       # 4 consecutive stuck windows (~8 s) → episode
+EXPL_STALL_LIMIT    = 60      # 60 consecutive samples after window (~8 s) → episode
                               # ends with the collision penalty: standing
                               # still must never beat acting under discounting
 
 # Reward — "slow down near a wall ahead" (clearance-scaled speed penalty)
-EXPL_SAFE_CLEAR      = 0.35   # front-clearance threshold (m)
+EXPL_SAFE_CLEAR      = 0.35   # front-clearance threshold (m) — v4 legacy gate
 EXPL_SAFE_SPEED_SCALE = -2.0  # r += scale · v · (1 − clear/thresh) when clear<thresh
 EXPL_ROAM_BONUS      = 0.3    # bold-roaming bonus: r += bonus · v when the
                               # front is clear — brisk motion in open space
                               # earns, creeping earns nothing (v = m/s)
+
+# v6: the safety gate reads MIN PER-RAY SLACK (scan − per-ray collision
+# threshold, all 36 rays) instead of the ±45° front clearance. Measured on
+# 916918 reachable configurations across the 13 mazes: 87.4% of deaths are
+# triggered by side/rear rays, and front_clear separates "about to die" from
+# "safe" with AUC 0.390 (worse than a coin flip — inverted), while min-slack
+# scores 0.056 (i.e. 0.944 as a danger score). A 0.08 m margin warns before
+# 97.1% of deaths at a 28.1% false-alarm rate (0.10 m → 99.7% / 38.7%).
+EXPL_SAFE_MARGIN     = 0.08   # slack (m) below which the speed penalty bites
+EXPL_ESCAPE_SLACK    = 0.06   # reactive turn threshold before the collision gate
+EXPL_ESCAPE_TURN     = 0.65   # normalized differential-drive turn command
+
+# ── v7: forward-biased action space ──────────────────────────────────────
+# Measured on the 2026-09-06 run (240 episodes, 9971 steps, 0 successes):
+# 79.6% of terminal contacts were REAR rays, 14.9% side, only 5.5% front.
+# The cause is geometric, not behavioural. The lidar sits 0.08 m ahead of a
+# 0.26 m chassis, so compute_collision_thresholds() gives 0.10 m at ray 0
+# (front) but 0.26 m at ray 18 (rear). With the legacy symmetric [left,
+# right] wheel action space a high-entropy SAC policy commands full reverse
+# roughly a quarter of the time, and from a cell centre there are only
+# 0.195 m / 4.1 control steps of margin at EXPL_W_MAX = 20 rad/s.
+#
+# "twist" maps the 2-D action to (forward, turn) with the forward channel
+# squashed onto [-EXPL_REVERSE_FRAC, 1] instead of [-1, 1]: full forward
+# authority (the user's speed requirement is unchanged), just enough reverse
+# to back out of a dead end, and a zero action now drifts FORWARD rather
+# than sitting still. "wheels" restores the legacy mapping bit-for-bit.
+EXPL_ACTION_MODE   = "twist"  # "twist" (v7) | "wheels" (v4-v6 legacy)
+EXPL_REVERSE_FRAC  = 0.25     # max reverse as a fraction of forward authority
+EXPL_TURN_MAX      = 0.45     # differential term at |a_turn| = 1
+
+# ── v7: front-cone safety shield ─────────────────────────────────────────
+# EXPL_ESCAPE_SLACK = 0.06 m fires 1.2 control steps before the terminal
+# contact at 0.48 m/s — far too late to change the outcome, which is why the
+# shield never showed up in the outcome mix. A 15-line scripted reactive
+# controller using the thresholds below (probe, 2026-09-06) survived 500
+# steps on delta_1 with 6/25 zones and R = +44.8, against SAC's 39 steps,
+# 1.5/25 zones and R = -27. The shield watches a FRONT CONE rather than the
+# global min slack so that merely passing a side wall in a 0.75 m corridor
+# (side slack 0.247 m when centred) does not trip it.
+EXPL_SHIELD_CONE    = 35.0    # half-angle (deg) of the watched front cone
+EXPL_SHIELD_SLOW    = 0.30    # front slack (m) below which forward is throttled
+EXPL_SHIELD_TURN    = 0.18    # front slack (m) below which the shield turns
+EXPL_SHIELD_FLOOR   = 0.45    # residual forward authority at zero front slack
+EXPL_SHIELD_STREAK  = 150     # consecutive shield steps that count as a stall
+EXPL_SHIELD_RELEASE = 0.26    # front slack (m) the pivot must recover to before
+                              # the shield re-arms (hysteresis; see v9 below)
+
+# ── v10: rotation lookahead ──────────────────────────────────────────────
+# The bands above are sized for the TRANSLATION failure: at 0.48 m/s a step
+# covers 0.048 m, so 0.18 m of slack is ~3.7 control steps of warning. The
+# ROTATION failure is 2.5x faster and the bands never saw it. The collision
+# threshold is a function of bearing (0.100 m at the nose, 0.127 m at the
+# flank, 0.260 m astern — the lidar sits LIDAR_X_OFF forward of the chassis
+# centre), and it steps by 0.0685 m between the 150° and 160° rays, where a
+# ray stops striking the side of the chassis rectangle and starts striking
+# its rear face. So a STATIONARY obstacle loses 0.0685 m of slack per 10° of
+# yaw. At EXPL_TURN_MAX the chassis yaws 13.8°/step, i.e. 0.094 m of slack
+# per step — 1.9 steps from the 0.18 m trigger to contact, too late to stop.
+#
+# Measured consequence, over the 355 collisions of the v9 run that survived
+# the teleport bug: the breaching ray was FRONT on 1% (REAR 34%, LEFT 34%,
+# RIGHT 30%), so the cone the shield watches is the one sector the robot
+# almost never dies in. Raising the trigger cannot fix that — a threshold
+# with room for a spin would fire continuously in a 0.75 m corridor, whose
+# flank slack is 0.248 m. Predicting instead is both cheap and direction-
+# aware: rotate the threshold curve by the yaw the command is ASKING for and
+# re-subtract.
+#
+# The prediction is a VETO with its own small margin, NOT a second slack
+# threshold. The first cut compared the global minimum of the prediction
+# against EXPL_SHIELD_TURN, and measured over 1560 collision-free poses
+# sampled across all 13 mazes that fires on 84% of them with a STRAIGHT
+# command: a global minimum is not comparable to a cone minimum, because the
+# rear threshold is 0.260 m and a wall 0.30 m astern — ordinary in a 0.75 m
+# maze — already reads 0.04 m of slack while the robot is perfectly safe
+# driving away from it. A guard that fires everywhere buys survival by
+# refusing to explore, which is the failure that already cost this project a
+# campaign. The margin below asks the narrow question instead: will the yaw
+# this command is requesting leave anything at all?
+#
+# Measured on the 1094 of those poses that are not already hugging a wall:
+# the cone rule alone fires on 30.1%, the veto adds 9.8 points, and 9.7 of
+# those 9.8 are commands whose OPPOSITE turn is clear — so the shield mirrors
+# the turn and the robot keeps driving. Only 0.1% are boxed in badly enough
+# to reach the escape. At 0.06 m the escape share jumps to 6.3%, which is
+# where the trap starts, so the margin stays under one ray-step of the
+# threshold cliff.
+EXPL_SHIELD_LOOKAHEAD = 2.0    # control steps of commanded yaw the veto looks
+                               # ahead (0 disables the lookahead entirely)
+EXPL_SHIELD_ROT_MARGIN = 0.04  # m of slack the predicted yaw must leave; below
+                               # this the turn is mirrored, or escaped if both
+                               # directions are doomed
+
+# ── v9: motion smoothing ─────────────────────────────────────────────────
+# Measured on the live v8 policy (checkpoint 310k, 2026-09-06). SAC draws a
+# FRESH sample from its Gaussian every 100 ms control step, so on an
+# IDENTICAL observation two consecutive turn commands differ by |da| = 0.33
+# on average (p90 1.10) and flip SIGN on 17% of steps. At the v8
+# EXPL_TURN_MAX = 0.90 the full-scale differential is 2*0.90*0.48/0.18 =
+# 4.8 rad/s = 275 deg/s, so that sampling noise ALONE swung the heading by
+# 9 deg per step on average and 30 deg at the p90 — the weave the operator
+# reported watching in Gazebo on a straight corridor. Three changes:
+#
+#   1. EXPL_TURN_MAX 0.90 -> 0.45 (137 deg/s): a 90 deg junction turn still
+#      takes only 0.66 s, but the noise amplitude halves.
+#   2. A slew-rate cap on the (forward, turn) command. The policy keeps full
+#      authority — it just has to hold an opinion for two consecutive steps
+#      to spend it, which uncorrelated noise cannot do.
+#   3. An action-rate penalty, so smoothness is TRAINED rather than merely
+#      filtered: a policy that saturates the limiter every step still weaves
+#      at the limit, and nothing in the v8 reward ever charged it for that.
+#
+# Rates are in normalized command units per control step.
+EXPL_FWD_RATE      = 0.35     # max |d forward| per step (full stop->go in 3)
+EXPL_TURN_RATE     = 0.22     # max |d turn| per step (full-scale turn in 5)
+EXPL_R_SMOOTH      = -0.50    # r += scale * (d_fwd^2 + d_turn^2)
+
+# v6: discount horizon. gamma 0.99 at dt=0.10 s = 100 steps = 10 s, against a
+# 1500-step (150 s) episode: a zone 4 cells away was worth 8·0.99^300 = 0.39
+# and EXPL_R_EXIT was worth 0.03 — less than one step of roam bonus, so
+# farming the roam bonus was the arithmetically optimal policy. 0.997 gives a
+# 333-step (33 s) horizon without the variance of 0.999.
+EXPL_GAMMA           = 0.997
+
+# v6: entropy floor. The v4 run relapsed into the creep trap at t≈362k as
+# ent_coef auto-tuned down to 0.0089 (policy went near-deterministic). SAC's
+# default target entropy is −dim(A) = −2.0; −1.0 keeps the policy exploring.
+EXPL_TARGET_ENTROPY  = -1.0
+
+# ── v8: EXPLORE-phase geodesic shaping ───────────────────────────────────
+# The EXIT phase has had potential shaping since v4, but EXPLORE — where the
+# agent actually spends its 1500 steps — had only the one-shot +8 per zone.
+# With EXPL_GAMMA = 0.997 a zone four cells away is worth 8·0.997^160 = 4.9
+# at best and nothing at all if the agent never stumbles into it, so the
+# gradient the critic sees between "walking toward an unvisited zone" and
+# "walking away from it" was zero. These constants add the same Ng et al.
+# potential term the exit leg uses, computed on ONE geodesic field per zone
+# (rl_training/zone_field.py) against the nearest UNVISITED zone.
+EXPL_N_ZONES        = 25      # watershed zones per maze (maze_registry raster)
+EXPL_ZONE_FIELD_RES = 0.025   # raster resolution (m) — matches the exit field
+EXPL_ZONE_POT_SCALE = 2.0     # scale · Δ(geodesic dist to nearest unvisited)
+EXPL_ZONE_DESCENT_R = 6       # descent-direction search radius, in cells
+                              # (0.15 m: past the 0.10 m inflation band, so a
+                              # robot hugging a wall still finds a free cell)
 
 # Reward — phase EXIT
 EXPL_EXIT_POT_SCALE = 2.0     # potential shaping: scale · Δ(geodesic dist to exit)

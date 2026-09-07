@@ -108,8 +108,8 @@ def world_header(world_name: str, ground_size: float = 50.0) -> str:
     return f"""<?xml version="1.0" ?>
 <sdf version="1.10">
 <world name="{world_name}">
-  <physics name="1ms" type="ignored">
-    <max_step_size>0.001</max_step_size>
+  <physics name="8ms" type="ignored">
+    <max_step_size>0.008</max_step_size>
     <real_time_factor>1.0</real_time_factor>
   </physics>
   <plugin filename="gz-sim-physics-system"   name="gz::sim::systems::Physics"/>
@@ -254,18 +254,23 @@ def _nudge_to_free(free: np.ndarray, ix: int, iy: int):
 
 def _gate_mask(spec: MazeSpec, gx: np.ndarray, gy: np.ndarray,
                res: float) -> np.ndarray:
-    """Gate boxes: within half_width + 2*res of the gap center along the
-    border AND within 0.10 m of the border line along its normal, UNION a
-    recess box per opening: the same along-border span, but along the
+    """Gate boxes for the EXIT opening: within half_width + 2*res of the gap
+    center along the border AND within 0.10 m of the border line along its
+    normal, UNION a recess box: the same along-border span, but along the
     normal from the border line through the recorded mouth line extended
-    0.10 m into the maze interior. Openings recessed into a zigzag
+    0.10 m into the maze interior. An opening recessed into a zigzag
     outline (sigma's north V mouth sits ~0.33 m below the bbox line)
-    would otherwise leak past a gate pinned to the bbox line. For flush
-    openings (xy_normal == border line) the recess box is contained in
-    the first box, so nothing changes."""
+    would otherwise leak past a gate pinned to the bbox line. For a flush
+    opening (xy_normal == border line) the recess box is contained in
+    the first box, so nothing changes.
+
+    The entrance is deliberately NOT gated: it is plugged by
+    ``maze_registry.entrance_seal_wall``, so the exit gap is the only
+    traversable border opening and a leak through the entrance is a real
+    seal failure, not an expected one."""
     bx0, by0, bx1, by1 = spec.wall_bbox
     gate = np.zeros(gx.shape, dtype=bool)
-    for op in spec.openings:
+    for op in (spec.exit_opening,):
         ox, oy = op.xy_local
         span = op.half_width + 2 * res
         if op.border == "south":
@@ -289,9 +294,13 @@ def _gate_mask(spec: MazeSpec, gx: np.ndarray, gy: np.ndarray,
 
 def _ortho_perimeter_violations(spec: MazeSpec) -> list:
     """Walk the bbox rectangle perimeter at exactly 1 cm steps; every point
-    must lie inside some wall (inflate 2 mm) except inside the openings'
-    gaps. Walks are parameterized so the ENDPOINT lands exactly on the
-    rectangle corner (no half-step overshoot)."""
+    must lie inside some wall (inflate 2 mm) except inside the EXIT gap.
+    Walks are parameterized so the ENDPOINT lands exactly on the
+    rectangle corner (no half-step overshoot).
+
+    The entrance is excluded from the exemption because it is plugged (see
+    ``maze_registry.entrance_seal_wall``), so its span must be covered by
+    wall like any other stretch of perimeter."""
     bx0, by0, bx1, by1 = spec.wall_bbox
     step = 0.01
     violations = []
@@ -299,7 +308,7 @@ def _ortho_perimeter_violations(spec: MazeSpec) -> list:
                                   ("east", by0, by1, bx1),
                                   ("north", bx1, bx0, by1),
                                   ("west", by1, by0, bx0)):
-        ops = [op for op in spec.openings if op.border == border]
+        ops = [op for op in (spec.exit_opening,) if op.border == border]
         n = int(round(abs(a1 - a0) / step))
         sgn = 1.0 if a1 >= a0 else -1.0
         along_axis = 0 if border in ("south", "north") else 1
