@@ -50,9 +50,16 @@ spawn_all() {
 }
 
 while true; do
-    RUN=$(find "$RUN_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name logs \
-         -printf '%T@ %p\n' 2>/dev/null \
-         | sort -nr | head -1 | cut -d' ' -f2-)
+    # Discover by the CSV, not by directory shape. A campaign root
+    # (sac_explore_multi_runs/<campaign>/) is itself a directory one level
+    # down and is newer than any attempt inside it, so a depth-limited find
+    # returns the ROOT -- which has no logs/explore_multi.csv, so the
+    # analyzer below fails silently and the snapshot is empty for the whole
+    # campaign. Glob the CSV at any depth and take the newest.
+    RUN=$(ls -1t "$RUN_ROOT"/*/logs/explore_multi.csv \
+             "$RUN_ROOT"/*/*/logs/explore_multi.csv 2>/dev/null \
+         | head -1)
+    RUN="${RUN%/logs/explore_multi.csv}"
     OUT="${RUN:+$RUN/logs/analysis.log}"
     OUT="${OUT:-/tmp/maze_watchdog.log}"
     mkdir -p "$(dirname "$OUT")"

@@ -323,22 +323,61 @@ def rotation_lookahead_slack(scan: np.ndarray, threshold: np.ndarray,
     pessimistic -- a command whose rotation opens the scan up must not be
     credited with slack the robot does not have yet.
     """
+    return arc_lookahead_slack(scan, threshold, 0.0, turn, steps)
+
+
+def arc_lookahead_slack(scan: np.ndarray, threshold: np.ndarray,
+                        fwd: float, turn: float,
+                        steps: float = C.EXPL_SHIELD_LOOKAHEAD,
+                        pessimistic: bool = True) -> np.ndarray:
+    """Slack each return will have after ``steps`` of the commanded ARC.
+
+    ``rotation_lookahead_slack`` is the ``fwd == 0`` case of this, and the
+    v10 veto still uses it unchanged. The generalisation exists because the
+    shield's own ESCAPE translates, and a yaw-only prediction is blind to
+    that by construction -- its docstring says "Range is left alone".
+
+    That blindness is where the robot now dies. Over the 126 on-policy
+    episodes of attempt_20260907_002321 the veto did what it was built for:
+    deaths with the shield disengaged fell 69% -> 4% and FRONT/LEFT/RIGHT
+    deaths all roughly halved. But 89 of 98 collisions (91%, against 31%
+    under v9) happened INSIDE the escape, 45 of them creeping backwards at
+    EXPL_SHIELD_FLOOR, because the escape picked its direction from an
+    instantaneous 0.18 m cone gate against a 0.260 m rear threshold and then
+    held it across steps.
+
+    Yaw carries a fixed return from bearing b to b - psi, so it is judged
+    against tau(b - psi) -- unchanged from the rotation case. A body
+    translation of d along +x additionally moves a return at (r cos b,
+    r sin b) to (r cos b - d, r sin b), i.e. r -> r - d cos(b) to first
+    order in d/r, which is exact for a surface normal to the ray and the
+    same order of approximation the yaw term already makes.
+
+    ``pessimistic`` clamps the result elementwise to the CURRENT slack so a
+    guard can never be credited with room the robot does not have yet. A
+    guard wants that; a CHOOSER cannot use it, because clamping collapses
+    every safe candidate onto the same measured minimum and destroys the
+    ranking. So the veto keeps it and the escape's selection turns it off.
+    """
     scan = np.asarray(scan, dtype=np.float32)
     threshold = np.asarray(threshold, dtype=np.float32)
     n = scan.size
     if n == 0 or threshold.size != n:
         return np.zeros(0, dtype=np.float32)
     slack = scan - threshold
-    if float(steps) <= 0.0 or float(turn) == 0.0:
+    if float(steps) <= 0.0 or (float(turn) == 0.0 and float(fwd) == 0.0):
         return slack
     rim = C.EXPL_W_MAX * C.WHEEL_RADIUS
-    psi = math.degrees(2.0 * float(turn) * rim / C.WHEEL_SEP) \
-        * C.EXPL_DT * float(steps)
+    horizon = C.EXPL_DT * float(steps)
+    psi = math.degrees(2.0 * float(turn) * rim / C.WHEEL_SEP) * horizon
+    dist = float(fwd) * rim * horizon
     deg = np.arange(n, dtype=np.float32) * (360.0 / n)
     tau_next = np.interp((deg - psi) % 360.0,
                          np.append(deg, 360.0),
                          np.append(threshold, threshold[0]))
-    return np.minimum(slack, scan - tau_next.astype(np.float32))
+    rng_next = scan - dist * np.cos(np.radians(deg))
+    pred = (rng_next - tau_next).astype(np.float32)
+    return np.minimum(slack, pred) if pessimistic else pred
 
 
 def explore_shield(wheels: np.ndarray, scan: np.ndarray,
@@ -471,20 +510,43 @@ def explore_shield(wheels: np.ndarray, scan: np.ndarray,
     # exception.
     #
     # Translating off the wall beats rotating on it whichever end is open,
-    # so pick the direction from the clearances instead of assuming forward:
-    # creep forward when the front is clear, creep BACK when only the rear
-    # is, and keep the pure rotation for the genuinely boxed-in case where
-    # there is nothing else left.
+    # so the direction comes from the clearances rather than from assuming
+    # forward, with the pure rotation kept for the genuinely boxed-in case.
+    #
+    # v11: judge that choice on the PREDICTED cone, not the measured one.
+    # The gate below used to read the instantaneous slack and compare it
+    # against turn_at = 0.18 m -- but the rear collision threshold is
+    # 0.260 m, so a wall 0.45 m astern scores 0.19 m, clears the gate, and
+    # the escape then reverses into it at floor * EXPL_W_MAX * WHEEL_RADIUS
+    # = 0.216 m/s while the override hysteresis holds the direction across
+    # steps with nothing re-checking. That is where the deaths moved to once
+    # the v10 rotation veto closed the driven path: over the 126 on-policy
+    # episodes of attempt_20260907_002321, REAR deaths went 20% -> 69% and
+    # 89 of 98 collisions (91%, against 31% under v9) happened inside this
+    # branch -- 45 of them creeping at exactly EXPL_SHIELD_FLOOR.
+    #
+    # Scoring the same cone through arc_lookahead_slack costs the candidate
+    # the distance it is about to cover, so the 0.45 m wall now scores
+    # 0.19 - 0.45 * 0.48 * EXPL_DT * EXPL_SHIELD_LOOKAHEAD = 0.147 m and is
+    # refused. Comparing the two predictions instead of testing front first
+    # also lets the escape CHOOSE the roomier end rather than fall into the
+    # first one that happens to pass.
     front = np.abs(rel) <= float(cone_deg)
     rear = np.abs(np.abs(rel) - 180.0) <= float(cone_deg)
-    front_slack = float(slack[front].min()) if front.any() else float("-inf")
-    rear_slack = float(slack[rear].min()) if rear.any() else float("-inf")
-    if front_slack > turn_at:
-        base = floor
-    elif rear_slack > turn_at:
-        base = -floor
+
+    def _cone_score(base: float, cone: np.ndarray) -> float:
+        if not cone.any():
+            return float("-inf")
+        pred = arc_lookahead_slack(scan, threshold, base, turn,
+                                   pessimistic=False)
+        return float(pred[cone].min())
+
+    fwd_score = _cone_score(floor, front)
+    rev_score = _cone_score(-floor, rear)
+    if max(fwd_score, rev_score) <= float(turn_at):
+        base = 0.0                      # boxed in: rotating is all that is left
     else:
-        base = 0.0
+        base = floor if fwd_score >= rev_score else -floor
     out = np.array([base - turn, base + turn], dtype=np.float32)
     return np.clip(out, -1.0, 1.0), abs(base), True
 
