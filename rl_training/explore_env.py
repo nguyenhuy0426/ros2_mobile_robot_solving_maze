@@ -59,6 +59,7 @@ from std_msgs.msg import Float64
 from rl_training import config as C
 from rl_training import maze_registry as MR
 from rl_training.reward_shaping import (
+    ShieldLockMonitor,
     StallMonitor,
     StuckTracker,
     action_rate_penalty,
@@ -389,7 +390,9 @@ def explore_shield(wheels: np.ndarray, scan: np.ndarray,
                    turn_strength: float = C.EXPL_ESCAPE_TURN,
                    engaged: bool = False,
                    release_at: float = C.EXPL_SHIELD_RELEASE,
-                   rot_margin: float = C.EXPL_SHIELD_ROT_MARGIN
+                   rot_margin: float = C.EXPL_SHIELD_ROT_MARGIN,
+                   escape_sign: int = 0,
+                   sign_margin: float = C.EXPL_ESCAPE_SIGN_MARGIN
                    ) -> Tuple[np.ndarray, float, bool]:
     """Throttle, then override, a wheel command that is driving into a wall.
 
@@ -492,6 +495,19 @@ def explore_shield(wheels: np.ndarray, scan: np.ndarray,
     turn = float(np.clip(turn_strength, 0.2, 1.0))
     if left_clear < right_clear:
         turn = -turn
+
+    # v12: hold the escape's steering sign across steps. turn > 0 means the
+    # left 60 deg cone was the roomier one; in a staircase-diagonal corridor
+    # that choice alternates tooth to tooth and the robot rocks in place,
+    # never completing the sweep that would bring a side opening into the
+    # front cone and let `base` release below. Once engaged the sign flips
+    # only when the other side is clearer by more than sign_margin -- the same
+    # hysteresis the throttle band applies to `engaged`.
+    if escape_sign and (turn > 0.0) != (escape_sign > 0):
+        held = left_clear if escape_sign > 0 else right_clear
+        other = right_clear if escape_sign > 0 else left_clear
+        if not (other - held > float(sign_margin)):
+            turn = math.copysign(abs(turn), float(escape_sign))
 
     # Arc away rather than spin in place when there is room ahead. The lidar
     # is mounted 0.08 m off the rotation centre, so a pure in-place turn
@@ -661,7 +677,10 @@ class GazeboExploreEnv(gym.Env):
             C.EXPL_STUCK_WINDOW, C.EXPL_STUCK_MIN_DISP, self._stall_limit)
         self._action_mode = (str(action_mode) if action_mode is not None
                              else C.EXPL_ACTION_MODE)
-        self._shield_streak = 0
+        self._shield_lock = ShieldLockMonitor(
+            C.EXPL_SHIELD_STREAK, C.EXPL_SHIELD_LOCK_FRAC)
+        self._prev_override = False
+        self._last_escape_sign = 0
         self._frames: deque = deque(maxlen=4)
 
         # Sensor state (guarded by _lock)
@@ -929,7 +948,17 @@ class GazeboExploreEnv(gym.Env):
         else:
             wheels, self._last_action_scale, self._last_safety_override = (
                 explore_shield(wheels, scan, self._collision_thresh,
-                               engaged=self._last_safety_override))
+                               engaged=self._last_safety_override,
+                               escape_sign=self._last_escape_sign))
+            # v12: remember which way the escape steered so the next call can
+            # hold it (hysteresis on the steering sign, not just the throttle
+            # band). Cleared whenever the shield is not overriding.
+            if self._last_safety_override:
+                esc_turn = 0.5 * (float(wheels[1]) - float(wheels[0]))
+                self._last_escape_sign = (
+                    1 if esc_turn > 0.0 else -1 if esc_turn < 0.0 else 0)
+            else:
+                self._last_escape_sign = 0
         # Track what the WHEELS were actually given, shield included, so the
         # limiter ramps from the real state rather than from a command the
         # shield overrode — otherwise every shield release is a step change.
@@ -1065,7 +1094,9 @@ class GazeboExploreEnv(gym.Env):
         self._zone.reset(xy)
         self._stuck.reset(xy)
         self._stall.reset(xy)
-        self._shield_streak = 0
+        self._shield_lock.reset()
+        self._prev_override = False
+        self._last_escape_sign = 0
         # The robot is teleported and stationary, so the limiter must ramp
         # from a standstill; carrying the last episode's command over would
         # charge the first step of the new episode for a phantom reversal.
@@ -1222,19 +1253,26 @@ class GazeboExploreEnv(gym.Env):
             # stall. StallMonitor measures NET displacement over a 20-step
             # window, so it kills a robot that is rotating to find an
             # opening: the scripted probe lost a 6/25-zone episode that way
-            # at step 333. The streak cap keeps "hide inside the shield
+            # at step 333. The lock cap keeps "hide inside the shield
             # forever" from becoming the optimal policy.
+            #
+            # v12: the cap is a SLIDING window (ShieldLockMonitor), not a
+            # consecutive run. A staircase corridor releases the shield for
+            # one step every few, which zeroed the old consecutive counter so
+            # it never reached EXPL_SHIELD_STREAK -- the sigma_3 episode at
+            # ts 419672 rode the full 1500-step timeout with the shield
+            # engaged 88% of the time. The window survives those blips.
+            lock = self._shield_lock.update(self._last_safety_override)
             if self._last_safety_override:
-                # Freeze the monitor while the shield drives; re-seed its
-                # window on release so a stale pre-override position cannot
-                # fire a spurious stall on the very next step.
-                self._shield_streak += 1
-                stalled = self._shield_streak >= C.EXPL_SHIELD_STREAK
+                stalled = lock
             else:
-                if self._shield_streak:
+                # Re-seed the displacement window when the policy takes back
+                # over so a stale pre-override position cannot fire a spurious
+                # stall on the very next step.
+                if self._prev_override:
                     self._stall.reset(xy)
-                self._shield_streak = 0
-                stalled = self._stall.update(xy)
+                stalled = self._stall.update(xy) or lock
+            self._prev_override = self._last_safety_override
             if stalled:
                 reward += C.EXPL_R_COLLISION
                 terminated = True

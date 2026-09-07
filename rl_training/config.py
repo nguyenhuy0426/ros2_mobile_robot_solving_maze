@@ -409,9 +409,23 @@ EXPL_SHIELD_CONE    = 35.0    # half-angle (deg) of the watched front cone
 EXPL_SHIELD_SLOW    = 0.30    # front slack (m) below which forward is throttled
 EXPL_SHIELD_TURN    = 0.18    # front slack (m) below which the shield turns
 EXPL_SHIELD_FLOOR   = 0.45    # residual forward authority at zero front slack
-EXPL_SHIELD_STREAK  = 150     # consecutive shield steps that count as a stall
+EXPL_SHIELD_STREAK  = 150     # width of the shield-lock window (steps)
+EXPL_SHIELD_LOCK_FRAC = 0.85  # override fraction of that window that is a stall.
+                              # v12: the count is now over a SLIDING window, not
+                              # a consecutive run -- a staircase corridor drops
+                              # the override for one step every few, which reset
+                              # the old consecutive counter so a locked robot
+                              # rode the full 1500-step timeout (sigma_3 at
+                              # ts 419672: 88% override, cov 0.04, R -169.7).
 EXPL_SHIELD_RELEASE = 0.26    # front slack (m) the pivot must recover to before
                               # the shield re-arms (hysteresis; see v9 below)
+EXPL_ESCAPE_SIGN_MARGIN = 0.10  # m of extra side clearance the OTHER side must
+                              # show before an engaged escape flips its turn
+                              # direction. v12: without it the sign is recomputed
+                              # every step from left_clear vs right_clear, and in
+                              # a sawtooth corridor the nearer wall alternates
+                              # tooth to tooth, so the robot rocks in place and
+                              # never completes the sweep that frees `base`.
 
 # ── v10: rotation lookahead ──────────────────────────────────────────────
 # The bands above are sized for the TRANSLATION failure: at 0.48 m/s a step

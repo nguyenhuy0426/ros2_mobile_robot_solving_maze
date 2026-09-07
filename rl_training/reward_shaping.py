@@ -224,6 +224,36 @@ class StallMonitor:
         return self._consecutive >= self._limit
 
 
+class ShieldLockMonitor:
+    """Flicker-robust detector for a robot the safety shield has taken over.
+
+    The env used to count CONSECUTIVE override steps and reset on any single
+    release. A staircase-diagonal corridor makes the shield's cone slack
+    oscillate across its release band, so the override drops for one step every
+    few steps and the consecutive counter never reached its threshold -- a
+    locked robot rode the full episode timeout instead of terminating.
+
+    This counts override steps over a SLIDING window of ``window`` steps and
+    reports a lock once the window is full and at least ``frac`` of it was
+    shield-driven. A brief release no longer zeroes the progress.
+    """
+
+    def __init__(self, window: int, frac: float) -> None:
+        self._window = max(2, int(window))
+        self._frac = float(frac)
+        self._flags: Deque[bool] = deque(maxlen=self._window)
+
+    def reset(self) -> None:
+        self._flags.clear()
+
+    def update(self, overridden: bool) -> bool:
+        """Record this step's override flag; return True once it is a lock."""
+        self._flags.append(bool(overridden))
+        if len(self._flags) < self._window:
+            return False
+        return sum(self._flags) >= self._frac * self._window
+
+
 def action_smoothness_penalty(action, prev_action, scale: float) -> float:
     """Negative L2 penalty on the change in action (jerk), scaled by ``scale``.
 
