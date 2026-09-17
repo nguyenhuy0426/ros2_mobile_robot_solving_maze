@@ -4,6 +4,7 @@ from argparse import Namespace
 import subprocess
 import sys
 import threading
+import time
 from unittest.mock import Mock
 
 import gymnasium as gym
@@ -106,6 +107,7 @@ def test_actual_sac_warm_start_adds_only_requested_steps(tmp_path, monkeypatch):
     monkeypatch.setattr(trainer, '_make_env', lambda **kw: TinyExploreEnv())
     args = Namespace(run_dir=tmp_path / 'run', visit_memory=False,
                      seed=0, stall_limit=None, roam_bonus=None,
+                     exit_min_zones=None,
                      n_robots=1, bootstrap_scripted=0,
                      load=str(checkpoint), load_buffer=None,
                      gradient_steps=1,
@@ -153,6 +155,53 @@ def test_vector_stops_every_robot_before_updates_and_on_sensor_error():
         # A mid-loop sensor failure must still stop every robot, including
         # the ones whose step() never ran.
         assert all(r.hold.call_count >= 3 for r in robots)
+    finally:
+        env.close()
+
+
+def test_vector_waits_for_sensor_barriers_concurrently():
+    from rl_training.concurrent_vec_env import ConcurrentVecEnv
+
+    class BarrierEnv(TinyExploreEnv):
+        def __init__(self):
+            super().__init__()
+            self.barrier_started = threading.Event()
+
+        def wait_fresh_barrier(self):
+            self.barrier_started.set()
+            time.sleep(0.08)
+
+    robots = [BarrierEnv() for _ in range(3)]
+    env = ConcurrentVecEnv([lambda r=r: r for r in robots])
+    try:
+        env.reset()
+        started = time.monotonic()
+        env.step(np.zeros((3, 2), np.float32))
+        elapsed = time.monotonic() - started
+        assert all(robot.barrier_started.is_set() for robot in robots)
+        # Three sequential waits would take about 0.24 s; allow scheduling
+        # slack while still proving the barriers overlap.
+        assert elapsed < 0.18
+    finally:
+        env.close()
+
+
+def test_vector_resets_in_bounded_parallel_batches():
+    from rl_training.concurrent_vec_env import ConcurrentVecEnv
+
+    class ResetEnv(TinyExploreEnv):
+        def reset(self, *, seed=None, options=None):
+            time.sleep(0.08)
+            return super().reset(seed=seed, options=options)
+
+    env = ConcurrentVecEnv([lambda: ResetEnv() for _ in range(3)])
+    try:
+        started = time.monotonic()
+        env.reset()
+        elapsed = time.monotonic() - started
+        # Three serial resets would take about 0.24 s.  The bounded pool uses
+        # one batch for three robots, with scheduling slack below 0.18 s.
+        assert elapsed < 0.18
     finally:
         env.close()
 
@@ -205,6 +254,7 @@ def test_warm_start_with_replay_buffer_updates_from_the_first_step(tmp_path,
     monkeypatch.setattr(trainer, '_make_env', lambda **kw: TinyExploreEnv())
     args = Namespace(run_dir=tmp_path / 'run', visit_memory=False,
                      seed=0, stall_limit=None, roam_bonus=None,
+                     exit_min_zones=None,
                      n_robots=1, bootstrap_scripted=0,
                      load=str(checkpoint), load_buffer=str(buffer),
                      gradient_steps=1, ckpt_every=100, reset_elites=False,
@@ -227,6 +277,7 @@ def test_warm_start_without_buffer_still_refills_before_updating(tmp_path,
     monkeypatch.setattr(trainer, '_make_env', lambda **kw: TinyExploreEnv())
     args = Namespace(run_dir=tmp_path / 'run', visit_memory=False,
                      seed=0, stall_limit=None, roam_bonus=None,
+                     exit_min_zones=None,
                      n_robots=1, bootstrap_scripted=0,
                      load=str(checkpoint), load_buffer=None,
                      gradient_steps=1, ckpt_every=100, reset_elites=False,
@@ -281,7 +332,8 @@ def test_every_robot_cycles_through_its_whole_maze_group(tmp_path, monkeypatch):
 
     monkeypatch.setattr(trainer, '_make_env', spy)
     args = Namespace(run_dir=tmp_path / 'run', visit_memory=False, seed=0,
-                     stall_limit=None, roam_bonus=None, n_robots=2, bootstrap_scripted=0,
+                     stall_limit=None, roam_bonus=None, exit_min_zones=None,
+                     n_robots=2, bootstrap_scripted=0,
                      load=str(checkpoint), load_buffer=None, gradient_steps=1,
                      ckpt_every=100, reset_elites=False, steps=8)
     trainer._train(args, ['ortho_1', 'ortho_2', 'ortho_3'])

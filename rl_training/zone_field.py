@@ -19,8 +19,11 @@ a field cannot leak through a wall: the maze walls are 0.03 m thick against a
 0.10 m inflation, so the band on the far side of any wall is always blocked.
 """
 
+import hashlib
 import heapq
 import math
+import os
+from pathlib import Path
 from typing import AbstractSet, Tuple
 
 import numpy as np
@@ -44,16 +47,82 @@ class ZoneDistanceFields:
 
     # ── Construction ─────────────────────────────────────────────────
 
+    # Disk cache for the 25-field solve: the pure-Python Dijkstra costs
+    # 215-237 s per maze (measured), a price paid on every trainer start.
+    _CACHE_DIR = Path(C.WS_ROOT) / ".cache" / "zone_fields"
+
+    @classmethod
+    def _cache_path(cls, spec, resolution: float, inflate: float,
+                    n_zones: int, cache_key: str) -> Path:
+        """Cache file for this spec; fingerprint guards against stale hits."""
+        fp = hashlib.md5()
+        for part in (cache_key, repr(resolution), repr(inflate),
+                     repr(n_zones), repr(spec.bounds),
+                     repr(spec.placement_offset), repr(len(spec.walls_world))):
+            fp.update(part.encode("utf-8"))
+        fp.update(spec.zone_labels.tobytes())
+        return cls._CACHE_DIR / f"zone_fields_{cache_key}_{fp.hexdigest()[:8]}.npz"
+
+    @classmethod
+    def _load_cached(cls, spec, resolution: float, inflate: float,
+                     n_zones: int, cache_key: str, ny: int, nx: int
+                     ) -> "ZoneDistanceFields | None":
+        """Cached instance, or None on miss / corruption / shape drift."""
+        path = cls._cache_path(spec, resolution, inflate, n_zones, cache_key)
+        if not path.exists():
+            return None
+        try:
+            with np.load(path, allow_pickle=False) as z:
+                origin = tuple(float(v) for v in z["origin"])
+                res = float(z["res"])
+                blocked = z["blocked"]
+                dist = z["dist"]
+            if blocked.shape != (ny, nx) or dist.shape != (n_zones, ny, nx):
+                return None
+            return cls(origin, res, blocked, dist)
+        except Exception:
+            return None
+
+    @classmethod
+    def _store_cached(cls, spec, resolution: float, inflate: float,
+                      n_zones: int, cache_key: str, origin: Tuple[float, float],
+                      blocked: np.ndarray, dist: np.ndarray) -> None:
+        """Best-effort disk cache write; a cache failure never kills a build."""
+        try:
+            path = cls._cache_path(spec, resolution, inflate, n_zones, cache_key)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(path.name + ".tmp")
+            with open(tmp, "wb") as fh:
+                np.savez_compressed(fh,
+                                    origin=np.asarray(origin, dtype=np.float64),
+                                    res=np.float64(resolution),
+                                    blocked=blocked, dist=dist)
+            os.replace(tmp, path)                 # atomic on the same fs
+        except Exception:
+            pass
+
     @classmethod
     def from_spec(cls, spec, resolution: float = C.EXPL_ZONE_FIELD_RES,
                   inflate: float = C.ROBOT_RADIUS,
-                  n_zones: int = C.EXPL_N_ZONES) -> "ZoneDistanceFields":
-        """Build all zone fields for a PLACED ``MazeSpec`` (world frame)."""
+                  n_zones: int = C.EXPL_N_ZONES,
+                  cache_key: str = None) -> "ZoneDistanceFields":
+        """Build all zone fields for a PLACED ``MazeSpec`` (world frame).
+
+        ``cache_key=None`` builds from scratch on every call (legacy
+        behaviour); a non-None key persists the solve to disk and reloads
+        it on subsequent calls with the same fingerprint.
+        """
         ox, oy = spec.placement_offset
         bx0, by0, bx1, by1 = spec.bounds
         origin = (bx0 + ox, by0 + oy)
         nx = int(round((bx1 - bx0) / resolution))
         ny = int(round((by1 - by0) / resolution))
+
+        if cache_key is not None:
+            cached = cls._load_cached(spec, resolution, inflate, n_zones,
+                                      cache_key, ny, nx)
+            if cached is not None:
+                return cached
 
         xs = origin[0] + (np.arange(nx) + 0.5) * resolution
         ys = origin[1] + (np.arange(ny) + 0.5) * resolution
@@ -65,6 +134,10 @@ class ZoneDistanceFields:
 
         labels = cls._sample_labels(spec, gx, gy, nx, ny)
         dist = cls._solve(labels, blocked, resolution, n_zones)
+
+        if cache_key is not None:
+            cls._store_cached(spec, resolution, inflate, n_zones, cache_key,
+                              origin, blocked, dist)
         return cls(origin, resolution, blocked, dist)
 
     @staticmethod

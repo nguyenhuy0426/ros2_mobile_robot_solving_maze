@@ -101,6 +101,24 @@ def test_reversing_at_a_wall_astern_predicts_less_slack():
     assert back[_ray(180.0)] < still[_ray(180.0)]
 
 
+def test_shield_vetoes_a_fast_arc_before_the_current_scan_is_in_the_turn_band():
+    """Translation must trigger even when rotation and cone gates look safe."""
+    scan = _open()
+    scan[_ray(0.0)] = THRESH[_ray(0.0)] + 0.20
+    # Current slack is above the turn band and the rotation-only prediction is
+    # safe; over the two-step horizon, this fast curved arc consumes that
+    # margin.
+    assert float((scan - THRESH).min()) > C.EXPL_SHIELD_TURN
+    assert rotation_lookahead_slack(scan, THRESH, 0.0).min() \
+        > C.EXPL_SHIELD_ROT_MARGIN
+    assert arc_lookahead_slack(scan, THRESH, 0.8125, 0.1875).min() \
+        <= C.EXPL_SHIELD_ROT_MARGIN
+
+    _out, _scale, overridden = explore_shield(
+        np.array([0.625, 1.0], dtype=np.float32), scan, THRESH)
+    assert overridden
+
+
 def test_ranking_needs_the_unclamped_prediction():
     """Clamping to current slack makes every safe candidate tie.
 
@@ -120,18 +138,22 @@ def test_ranking_needs_the_unclamped_prediction():
 # ── the escape's choice ─────────────────────────────────────────────────
 
 def test_the_escape_does_not_reverse_into_a_wall_behind_it():
-    """Front blocked, rear tight-but-passing: the old gate reverses anyway.
+    """Front blocked, rear wall inside the escape's braking distance.
 
-    `rear_slack > turn_at` compares a 0.18 m gate against a 0.260 m rear
-    threshold, so a wall well inside braking distance clears it.
+    The chooser costs each candidate the arc it flies in the 2-step horizon:
+    0.45 * EXPL_W_MAX * WHEEL_RADIUS * EXPL_DT * EXPL_SHIELD_LOOKAHEAD =
+    0.0864 m astern, while the 0.2 s step sweeps the rear thresholds through
+    79 deg. A wall 0.38 m astern therefore scores 0.38 - 0.0864 - 0.129 =
+    0.165 m in the rear cone -- under the 0.18 m gate -- so reversing is
+    refused and the escape falls back to the boxed-in pivot (fwd = 0).
     """
     scan = _wall_at(_open(), 0.0, 0.12)            # front blocked -> escape
-    scan = _wall_at(scan, 180.0, 0.45)             # wall close astern
+    scan = _wall_at(scan, 180.0, 0.38)             # wall close astern
     out, _scale, overridden = explore_shield(np.array([1.0, 1.0], np.float32),
                                              scan, THRESH)
     assert overridden
     fwd, _turn = _fwd_turn(out)
-    assert fwd >= 0.0, f"escape reversed into a wall 0.45 m astern (fwd={fwd})"
+    assert fwd >= 0.0, f"escape reversed into a wall 0.38 m astern (fwd={fwd})"
 
 
 def test_the_escape_prefers_the_direction_with_more_predicted_slack():

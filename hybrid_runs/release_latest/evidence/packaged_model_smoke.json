@@ -1,0 +1,20 @@
+{
+  "scope": "Final packaged-weight Gazebo smoke; known map plus LiDAR scan-matched command odometry; Gazebo pose only audits; not SLAM",
+  "maze": "holdout_31001",
+  "success": true,
+  "reason": "goal",
+  "steps": 332,
+  "safety_overrides": 5,
+  "wall_contacts": 0,
+  "geometry_collision": false,
+  "contact_messages": 33201,
+  "lidar_noise_std_m": 0.015,
+  "lidar_dropout": 0.05,
+  "odom_linear_scale": 1.03,
+  "odom_angular_scale": 0.97,
+  "yaw_jitter_rad": 0.5,
+  "scan_match_corrections": 111,
+  "final_pose_error_m": 0.012595259501627048,
+  "max_pose_error_m": 0.046799598568802385,
+  "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+}

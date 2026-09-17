@@ -25,11 +25,11 @@ if ! [[ "$N" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 # ── Tọa độ START mê cung nhom8_mecanum ───────────────────────────────────────
-# Start cell (5,3) → world (2.25, -3.25, 0.024)
-# Goal  cell (1,3) → world (4.25, -3.25)
+# Start cell (5,3) → world (2.25, -3.25)
+# Goal  cell (2,4) → world (4.25, -3.25)
 DEFAULT_X=2.25
 DEFAULT_Y=-3.25
-DEFAULT_Z=0.024
+DEFAULT_Z=0
 
 X=${2:-$DEFAULT_X}
 Y=${3:-$DEFAULT_Y}
@@ -74,7 +74,7 @@ echo ""
 echo -e "  ${CYAN}${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
 echo -e "  ${CYAN}${BOLD}║  Spawning ${YELLOW}${N}${CYAN} robots vào world ${YELLOW}${WORLD}${CYAN}           ║${NC}"
 echo -e "  ${CYAN}${BOLD}║  START: x=${X}  y=${Y}  z=${Z}              ║${NC}"
-echo -e "  ${CYAN}${BOLD}║  GOAL : x=2.25  y=-3.25  (cell 1,3)          ║${NC}"
+echo -e "  ${CYAN}${BOLD}║  GOAL : x=4.25  y=-3.25  (cell 2,4)          ║${NC}"
 echo -e "  ${CYAN}${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}[1/3]${NC} Tạo SDF và spawn ${YELLOW}${N}${NC} robot(s) song song..."
@@ -193,7 +193,7 @@ echo -e "  ${GREEN}║  ${BOLD}${N} robot(s) đã sẵn sàng${NC}${GREEN}      
 echo -e "  ${GREEN}╠══════════════════════════════════════════════════════════════╣${NC}"
 echo -e "  ${GREEN}║${NC}  World      : ${WORLD}"
 echo -e "  ${GREEN}║${NC}  START      : x=${X}  y=${Y}  z=${Z}"
-echo -e "  ${GREEN}║${NC}  GOAL       : x=2.25  y=-3.25"
+echo -e "  ${GREEN}║${NC}  GOAL       : x=4.25  y=-3.25"
 echo -e "  ${GREEN}║${NC}  ──────────────────────────────────────────────────────"
 echo -e "  ${GREEN}║${NC}  Robots     : robot_1 .. robot_${N}"
 echo -e "  ${GREEN}║${NC}  Scan topics: /scan1 .. /scan${N}  (36 tia, 10°/tia)"

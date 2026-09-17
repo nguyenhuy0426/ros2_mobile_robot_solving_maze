@@ -1,0 +1,153 @@
+{
+  "scope": "Gazebo fixed known-map evaluation; ground-truth pose used by controller; not SLAM",
+  "episodes": 13,
+  "successes": 13,
+  "distinct_geometries": 12,
+  "wall_contacts": 0,
+  "geometry_collisions": 0,
+  "results": [
+    {
+      "maze": "delta_1",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 136,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "delta_2",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 123,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "ortho_1",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 168,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "ortho_2",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 284,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "ortho_3",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 289,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "ortho_4",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 285,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "ortho_5",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 314,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "ortho_6",
+      "success": true,
+      "reason": "goal",
+      "navigation": "disk",
+      "steps": 275,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+    },
+    {
+      "maze": "sigma_1",
+      "success": true,
+      "reason": "goal",
+      "navigation": "oriented",
+      "steps": 438,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "7a405bc7e6ca3a9f3746c94e55977d624370605a627e638aae21e5eb256750db"
+    },
+    {
+      "maze": "sigma_2",
+      "success": true,
+      "reason": "goal",
+      "navigation": "oriented",
+      "steps": 432,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "7a405bc7e6ca3a9f3746c94e55977d624370605a627e638aae21e5eb256750db"
+    },
+    {
+      "maze": "sigma_3",
+      "success": true,
+      "reason": "goal",
+      "navigation": "oriented",
+      "steps": 521,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "7a405bc7e6ca3a9f3746c94e55977d624370605a627e638aae21e5eb256750db"
+    },
+    {
+      "maze": "sigma_4",
+      "success": true,
+      "reason": "goal",
+      "navigation": "oriented",
+      "steps": 530,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "7a405bc7e6ca3a9f3746c94e55977d624370605a627e638aae21e5eb256750db"
+    },
+    {
+      "maze": "sigma_5",
+      "success": true,
+      "reason": "goal",
+      "navigation": "oriented",
+      "steps": 527,
+      "overrides": 0,
+      "wall_contacts": 0,
+      "geometry_collision": false,
+      "model_sha256": "7a405bc7e6ca3a9f3746c94e55977d624370605a627e638aae21e5eb256750db"
+    }
+  ]
+}

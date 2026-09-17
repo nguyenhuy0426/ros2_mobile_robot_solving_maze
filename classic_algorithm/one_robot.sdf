@@ -181,7 +181,7 @@
               <samples>36</samples>
               <resolution>1</resolution>
               <min_angle>0.000000</min_angle>
-              <max_angle>6.280000</max_angle>
+              <max_angle>6.108652</max_angle>  <!-- 2π × 35/36 = 350° — matches training sim endpoint=False -->
             </horizontal>
             <vertical>
               <samples>1</samples>

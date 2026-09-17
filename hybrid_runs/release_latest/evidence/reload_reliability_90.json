@@ -1,0 +1,292 @@
+{
+  "episodes": 90,
+  "successes": 90,
+  "success_rate": 1.0,
+  "wilson_95": [
+    0.9590643744356734,
+    1.0000000000000002
+  ],
+  "unique_geometries": 45,
+  "geometries_all_successful": 45,
+  "geometry_all_success_wilson_95": [
+    0.9213484012671117,
+    1.0
+  ],
+  "wall_contacts": 0,
+  "geometry_collisions": 0,
+  "model_hashes": [
+    "987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a"
+  ],
+  "per_geometry": {
+    "5x5:0.750:31001": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31002": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31003": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31004": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31005": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31006": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31007": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31008": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31009": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31010": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31011": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31012": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31013": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31014": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31015": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31016": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31017": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31018": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31019": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.750:31020": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32001": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32002": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32003": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32004": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32005": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32006": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32007": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32008": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32009": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "6x6:0.700:32010": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33001": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33002": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33003": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33004": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33005": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33006": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33007": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33008": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33009": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "5x5:0.600:33010": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "7x7:0.800:34001": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "7x7:0.800:34002": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "7x7:0.800:34003": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "7x7:0.800:34004": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    },
+    "7x7:0.800:34005": {
+      "successes": 2,
+      "episodes": 2,
+      "wall_contacts": 0,
+      "geometry_collisions": 0
+    }
+  }
+}

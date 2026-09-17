@@ -90,24 +90,6 @@
         </material>
       </visual>
 
-      <visual name='name_label'>
-        <pose>0 0.08 0.005 1.5707 0 1.5707</pose>
-        <geometry>
-          <text>
-            <string>BOT_ROBOT_ID</string>
-            <font_name>Liberation Sans</font_name>
-            <height>0.015</height>
-            <color>0 1 0 1</color>
-            <horizontal_alignment>center</horizontal_alignment>
-            <vertical_alignment>center</vertical_alignment>
-          </text>
-        </geometry>
-        <material>
-          <ambient>0 1 0 1</ambient><diffuse>0 1 0 1</diffuse>
-          <specular>0 0 0 1</specular><emissive>0 1 0 1</emissive>
-        </material>
-      </visual>
-
       <!-- ===== 3D block letters HUY ===== -->
       <visual name="txt_H_left">
         <pose>0.036193 0.08029 0.007033 0 0 0</pose>
@@ -167,21 +149,39 @@
         </material>
       </visual>
 
-      <!-- ===== LIDAR SENSOR =====
-           36 rays × 10°, range 0.05–12m, update 10 Hz.
+      <!-- ===== LIDAR SENSOR (GPU) =====
+           36 rays × 10°, range 0.05–3.0m, update 5 Hz.
            Ray-cast vào collision của TƯỜNG maze (chassis không cần collision riêng cho lidar).
+      -->
+      <!-- ===== WHY `gpu_lidar` (NOT CPU `lidar`) =====
+           gz-sim 8.11's Sensors system only registers GpuLidarTag — a CPU
+           `type="lidar"` sensor is silently ignored (no scans ever published),
+           which is why this stayed/reverted to `gpu_lidar`.
+
+           update_rate = 5: fleet of 13 robots × 5 Hz = 65 renders/s, inside
+           the ~85 renders/s measured bandwidth of a single ogre2 render
+           thread on this iGPU. The previous 10 Hz × 13 = 130 renders/s
+           saturated the render thread, scan rate collapsed, and the N=13
+           fleet died.
+
+           Specs UNCHANGED: 36 rays, range 0.05–3.0 m, topic /scanROBOT_ID —
+           the policy observation contract (150-dim) is untouched;
+           gz.msgs.LaserScan + ros_gz_bridge unchanged.
+
+           Consequence: control period = 0.2 s (EXPL_DT = 0.2 in
+           rl_training/config.py), matching this 5 Hz scan cycle.
       -->
       <sensor name="gpu_lidar" type="gpu_lidar">
         <pose relative_to="lidar_link">0 0 0 0 0 0</pose>
         <topic>/scanROBOT_ID</topic>
-        <update_rate>10</update_rate>
+        <update_rate>5</update_rate>
         <ray>
           <scan>
             <horizontal>
               <samples>36</samples>
               <resolution>1</resolution>
               <min_angle>0.000000</min_angle>
-              <max_angle>6.280000</max_angle>
+              <max_angle>6.108652</max_angle>  <!-- 2π × 35/36 = 350° — matches training sim endpoint=False -->
             </horizontal>
             <vertical>
               <samples>1</samples>
@@ -192,7 +192,7 @@
           </scan>
           <range>
             <min>0.05</min>
-            <max>12.0</max>
+            <max>3.0</max>  <!-- matches LIDAR_MAX in config.py -->
             <resolution>0.01</resolution>
           </range>
         </ray>

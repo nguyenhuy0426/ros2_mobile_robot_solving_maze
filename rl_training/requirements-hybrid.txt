@@ -1,0 +1,7 @@
+# Python dependencies for the promoted hybrid navigation release.
+# ROS 2 Jazzy packages (rclpy, geometry_msgs, sensor_msgs, ros_gz_bridge) come
+# from /opt/ros/jazzy and are intentionally not installed from PyPI.
+numpy==1.26.4
+scipy==1.14.1
+torch>=2.6,<3
+pytest>=8,<10

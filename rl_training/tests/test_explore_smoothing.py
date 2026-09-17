@@ -3,7 +3,9 @@
 test_explore_smoothing.py — Offline tests for the v9 motion-smoothing layer.
 
 Measured on the live v8 policy (checkpoint 310k, 2026-09-06): the turn channel
-is resampled i.i.d. by SAC every 100 ms control step, and on an IDENTICAL
+is resampled i.i.d. by SAC every control step (100 ms on v8; the fleet now
+steps at 0.2 s / 5 Hz, so the per-step heading figures below double), and on
+an IDENTICAL
 observation two consecutive samples differ by |da| = 0.33 on average (p90
 1.10), flipping SIGN on 17% of steps. At the v8 EXPL_TURN_MAX = 0.90 the
 full-scale differential is 275 deg/s over a 0.18 m wheel separation, so that
@@ -58,7 +60,8 @@ def test_twist_of_wheels_inverts_the_wheel_pair():
 def test_slew_limit_caps_the_per_step_turn_change():
     """A step change in the turn command is what the operator sees as weave.
 
-    SAC resamples the turn channel independently every 100 ms, so without a
+    SAC resamples the turn channel independently every control step (0.2 s on
+    the 5 Hz fleet), so without a
     rate cap the heading can swing by a full EXPL_TURN_MAX reversal in one
     step. Capping the CHANGE leaves the policy full authority — it just has
     to hold an opinion for two consecutive steps to use it.
@@ -128,7 +131,8 @@ def test_action_rate_penalty_punishes_sawing_and_never_rewards():
 # ── shield hysteresis ───────────────────────────────────────────────────
 
 def test_shield_override_holds_until_slack_clears_the_release_band():
-    """One threshold = bang-bang chatter at 10 Hz; that is the stutter.
+    """One threshold = bang-bang chatter at the 5 Hz control rate; that is
+    the stutter.
 
     Sitting just at EXPL_SHIELD_TURN the cone slack dithers across the
     trigger from lidar noise alone, so the command alternates between full
@@ -183,6 +187,8 @@ def test_resampling_noise_no_longer_swings_the_heading_per_step():
         worst = max(worst, abs(dyaw - np.degrees(prev[1] * 2.0 * rim / 0.18)
                                * C.EXPL_DT))
         prev = nxt
-    # v8 measured 30 deg at the p90 from noise alone; anything under a third
-    # of that reads as a steady arc rather than a weave.
-    assert worst < 10.0
+    # v8 measured 30 deg per 0.1 s step at the p90 from noise alone -- a
+    # 300 deg/s weave rate; anything under a third of that RATE reads as a
+    # steady arc rather than a weave. At the fleet's 0.2 s control step
+    # (5 Hz lidar) that bound is 100 deg/s * 0.2 s = 20 deg per step.
+    assert worst < 20.0

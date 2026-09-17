@@ -20,9 +20,10 @@ Two measured facts drive this file.
    rays, where a ray stops striking the side of the chassis rectangle and
    starts striking its rear face. A stationary obstacle therefore LOSES
    0.0685 m of slack for every 10 deg the robot yaws, without moving at all.
-   At EXPL_TURN_MAX the chassis yaws 13.8 deg per control step (19.9 deg
-   under the shield's own escape turn), so a spin burns 0.094 m of slack per
-   step against a 0.18 m trigger: 1.9 steps from trigger to contact. That is
+   At EXPL_TURN_MAX the chassis yaws 27.5 deg per 0.2 s control step (39.7 deg
+   under the shield's own escape turn), so a spin burns 0.188 m of slack per
+   step against a 0.18 m trigger: about one step from trigger to contact
+   (13.8 deg / 0.094 m per step at the old 0.1 s period). That is
    why the robot dies on its flanks and its back while turning, and why
    raising the trigger cannot fix it -- a threshold high enough to give a
    spin room to stop would fire continuously in a 0.75 m corridor, whose
@@ -141,16 +142,18 @@ def test_the_override_sees_a_flank_wall_the_travel_cone_cannot():
 
 
 def test_a_turn_into_the_rear_cliff_is_vetoed_while_the_scan_looks_safe():
-    """Slack 0.075 m now; 0.020 m after two steps of the commanded yaw.
+    """Slack 0.065 m now; 0.031 m after two steps of the commanded yaw.
 
-    Nothing in the present scan is alarming: 0.075 m clears the veto margin
+    Nothing in the present scan is alarming: 0.065 m clears the veto margin
     and the front cone is empty, so v9 drove this command at full authority.
-    What is alarming is the command itself -- yawing right walks this return
-    from the 0.205 m side threshold onto the 0.260 m rear one, and by the time
-    the slack alone reports it there are under two control steps left.
+    What is alarming is the command itself -- at the 0.2 s control step the
+    2-step lookahead yaw is 55 deg, sweeping this return from the 0.205 m
+    side threshold across the 0.2735 m rear-face cliff onto 205 deg, where
+    the threshold table interpolates to 0.239 m. By the time the slack alone
+    reports it there is barely one control step left.
     """
     scan = _open()
-    scan[15] = 0.28                       # one return 150 deg off the nose
+    scan[15] = 0.27                       # one return 150 deg off the nose
     assert float((scan - THRESH).min()) > C.EXPL_SHIELD_ROT_MARGIN   # safe today
     assert float(rotation_lookahead_slack(scan, THRESH,
                                           -C.EXPL_TURN_MAX).min()) \
@@ -170,7 +173,7 @@ def test_the_veto_mirrors_the_turn_rather_than_stopping_the_robot():
     a command with no safe rotation left may fall through to the escape.
     """
     scan = _open()
-    scan[15] = 0.28
+    scan[15] = 0.27
     out, _scale, overridden = explore_shield(_wheels(0.5, -C.EXPL_TURN_MAX),
                                              scan, THRESH)
     assert overridden
@@ -188,8 +191,8 @@ def test_a_command_with_no_safe_rotation_falls_through_to_the_escape():
     the wall -- instead of mirroring into the other one.
     """
     scan = _open()
-    scan[15] = 0.28                       # 150 deg
-    scan[21] = 0.28                       # 210 deg
+    scan[15] = 0.27                       # 150 deg
+    scan[21] = 0.27                       # 210 deg
     out, scale, overridden = explore_shield(_wheels(0.5, -C.EXPL_TURN_MAX),
                                             scan, THRESH)
     assert overridden

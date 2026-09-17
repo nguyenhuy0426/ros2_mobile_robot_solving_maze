@@ -1,8 +1,50 @@
-.codegraph
-__pycache__/
+# ROS and Python build output
+.codegraph/
 build/
 install/
 log/
-ga_checkpoints_v2/
+__pycache__/
+.pytest_cache/
+*.py[cod]
 *.log
 *.csv
+
+# Local environments and caches
+.venv/
+rl_venv/
+.cache/
+*.lock
+.~lock.*#
+
+# Personal editor and coding-agent configuration
+.vscode/
+.idea/
+.cursor/
+.windsurf/
+.roo/
+.kilo/
+CLAUDE.md
+claude.md
+**/CLAUDE.md
+**/claude.md
+.github/copilot-instructions.md
+
+# Generated training data, checkpoints, maps, and dashboards
+archive/
+*_runs/
+*checkpoints*/
+*tensorboard*/
+explore_maps*/
+rl_training/analysis_outputs/
+
+# Keep only the promoted release under hybrid_runs.
+!hybrid_runs/
+hybrid_runs/*
+!hybrid_runs/release_latest/
+hybrid_runs/release_latest/*
+!hybrid_runs/release_latest/manifest.json
+!hybrid_runs/release_latest/local_policy.pt
+!hybrid_runs/release_latest/tracking_policy.pt
+!hybrid_runs/release_latest/evidence/
+hybrid_runs/release_latest/evidence/*
+!hybrid_runs/release_latest/evidence/*.json

@@ -244,6 +244,16 @@ def episode_step_limit(exit_entered_at: Optional[int],
     return int(max(max_steps, exit_entered_at + exit_budget))
 
 
+def explore_complete(n_cells: int, min_zones: int) -> bool:
+    """True when the zone-count threshold that ends PHASE_EXPLORE is met.
+
+    Extracted so the curriculum threshold is unit-testable without Gazebo and
+    the trigger has exactly one definition. ``min_zones`` defaults to
+    config.EXPL_EXIT_MIN_ZONES (25, the legacy contract).
+    """
+    return int(n_cells) >= int(min_zones)
+
+
 def twist_of_wheels(wheels: np.ndarray) -> Tuple[float, float]:
     """``[left, right]`` -> ``(forward, turn)``; inverse of the pairing above."""
     w = np.asarray(wheels, dtype=np.float32)
@@ -466,11 +476,29 @@ def explore_shield(wheels: np.ndarray, scan: np.ndarray,
     # The veto is evaluated first but applied last: a front wall inside the
     # cone band still owns the step, because mirroring the turn would leave
     # the forward channel driving into it.
-    vetoed = float(rotation_lookahead_slack(scan, threshold, diff).min()) \
-        <= float(rot_margin)
-    mirrorable = vetoed and diff != 0.0 and float(
-        rotation_lookahead_slack(scan, threshold, -diff).min()) > \
-        float(rot_margin)
+    # The rotation-only veto catches threshold changes caused by yaw, but it
+    # cannot see a side/rear return that the commanded forward component will
+    # physically approach during the same horizon. That blind spot matches
+    # the live evidence: side collisions remained the dominant sector in the
+    # 13-robot run even while the rotation veto was engaged. Predict the full
+    # commanded arc for the guard, and score the mirrored arc with the same
+    # model so a safer opposite turn remains available.
+    rotation_pred = rotation_lookahead_slack(scan, threshold, diff)
+    arc_pred = arc_lookahead_slack(scan, threshold, fwd, diff,
+                                   pessimistic=True)
+    # Keep the exact rotation guard as a second conservative check: the
+    # first-order translation approximation can make a corner look slightly
+    # safer than the bearing-dependent threshold sweep really is.
+    arc_vetoed = (abs(fwd) > 1e-6 and abs(diff) > 1e-6
+                  and float(arc_pred.min()) <= float(rot_margin))
+    vetoed = (float(rotation_pred.min()) <= float(rot_margin)
+              or arc_vetoed)
+    mirror_rotation = rotation_lookahead_slack(scan, threshold, -diff)
+    mirror_arc = arc_lookahead_slack(scan, threshold, fwd, -diff,
+                                     pessimistic=True)
+    mirrorable = (vetoed and diff != 0.0
+                  and float(mirror_rotation.min()) > float(rot_margin)
+                  and float(mirror_arc.min()) > float(rot_margin))
 
     if cone_slack > trip and not vetoed:
         if cone_slack >= slow:
@@ -616,7 +644,8 @@ class GazeboExploreEnv(gym.Env):
                  prebuild: bool = False,
                  stall_limit: Optional[int] = None,
                  roam_bonus: Optional[float] = None,
-                 action_mode: Optional[str] = None):
+                 action_mode: Optional[str] = None,
+                 exit_min_zones: Optional[int] = None):
         super().__init__()
         self.robot_id = robot_id
 
@@ -677,6 +706,9 @@ class GazeboExploreEnv(gym.Env):
             C.EXPL_STUCK_WINDOW, C.EXPL_STUCK_MIN_DISP, self._stall_limit)
         self._action_mode = (str(action_mode) if action_mode is not None
                              else C.EXPL_ACTION_MODE)
+        self._exit_min_zones = (int(exit_min_zones)
+                                if exit_min_zones is not None
+                                else int(C.EXPL_EXIT_MIN_ZONES))
         self._shield_lock = ShieldLockMonitor(
             C.EXPL_SHIELD_STREAK, C.EXPL_SHIELD_LOCK_FRAC)
         self._prev_override = False
@@ -698,11 +730,24 @@ class GazeboExploreEnv(gym.Env):
         self._twist_delta: Tuple[float, float] = (0.0, 0.0)
         self._send_seq0: Optional[Tuple[int, int]] = None
         self._send_t = 0.0
+        # Fleet-barrier state (wait_fresh_barrier + _wait_fresh_step):
+        # _barrier_ok marks a latched _send_seq0 baseline whose wait the
+        # fleet-wide barrier already performed, so the paired step() consumes
+        # it without waiting again; _barrier_dead marks a barrier wait that
+        # failed terminally, so the paired step() re-raises immediately
+        # instead of paying the full hard timeout a second time.
+        self._barrier_ok = False
+        self._barrier_dead = False
         self._scan_seq = 0
         self._ray_angles: Optional[np.ndarray] = None
         self._pose_xy = self._spec.start_xy_world
         self._pose_yaw = self._spec.start_yaw
         self._pose_seq = 0
+        # Monotonic timestamp of the last stale-step warning; _wait_fresh_step
+        # throttles its warn to one line / 30 s per robot, because a sustained
+        # slow-RTF sensor burst (13 robots on one weak host) would otherwise
+        # emit one warn line per control step and flood the shared log.
+        self._last_stale_warn = 0.0
 
         # Episode state
         self._step_count = 0
@@ -713,6 +758,12 @@ class GazeboExploreEnv(gym.Env):
         self._prev_zone_d: Optional[float] = None
         self._zone_target = -1
         self._ep_idx = 0
+        # v14 exit curriculum, per maze: the zone threshold currently in
+        # force and the consecutive-success streak that promotes it (see
+        # _threshold_for and the SUCCESS branch in step()).
+        self._exit_thresholds: Dict[str, int] = {}
+        self._success_streak: Dict[str, int] = {}
+        self._cur_exit_zones = self._threshold_for(self._maze_name)
 
         if not rclpy.ok():
             rclpy.init()
@@ -805,12 +856,19 @@ class GazeboExploreEnv(gym.Env):
         """Per-zone geodesic fields of the current maze (built on first use)."""
         fields = self._bundle["zone_fields"]
         if fields is None:
-            fields = ZoneDistanceFields.from_spec(self._bundle["spec"])
+            fields = ZoneDistanceFields.from_spec(self._bundle["spec"],
+                                                  cache_key=self._maze_name)
             self._bundle["zone_fields"] = fields
         return fields
 
     def _unvisited(self) -> FrozenSet[int]:
         return frozenset(range(self._zone.n_zones)) - self._zone.visited
+
+    def _threshold_for(self, maze: str) -> int:
+        """Exit threshold in force for ``maze`` (curriculum-aware)."""
+        if not C.EXPL_EXIT_CURRICULUM:
+            return self._exit_min_zones
+        return self._exit_thresholds.get(maze, self._exit_min_zones)
 
     # ── ROS callbacks ────────────────────────────────────────────
 
@@ -841,17 +899,68 @@ class GazeboExploreEnv(gym.Env):
     # ── Sensor access ────────────────────────────────────────────
 
     def _wait_fresh(self, timeout: float = 5.0) -> None:
+        """Wait for a post-teleport scan+pose pair (stale-tolerant like step()).
+
+        Used by reset() after teleport + settle. The old strict wait raised
+        "No fresh /scan..." after ``timeout`` of silence; both smoke runs
+        died exactly there during the teleport storm.
+        """
+        # After a teleport we need a NEW pose to verify the robot landed;
+        # partial progress (fresh pose, stale scan) is acceptable because
+        # the verify only reads pose — tolerating stale beats crashing here.
+        start = time.monotonic()
         with self._lock:
             scan0, pose0 = self._scan_seq, self._pose_seq
-        deadline = time.monotonic() + timeout
+        self._wait_fresh_core(scan0, pose0, start, soft_timeout=timeout)
+
+    def _wait_fresh_core(self, scan0: int, pose0: int, start: float,
+                         soft_timeout: float = C.EXPL_SENSOR_TIMEOUT) -> bool:
+        """Shared wait: fresh post-``start`` scan+pose, stale-tolerant.
+
+        Returns True when the wait ended with usable data (fresh, or partial
+        progress accepted after the soft timeout). Raises RuntimeError only
+        when NO sensor data at all arrives within EXPL_SENSOR_HARD_TIMEOUT.
+
+        ``soft_timeout`` overrides the EXPL_SENSOR_TIMEOUT soft window (used
+        by tests and timeout overrides); the EXPL_SENSOR_HARD_TIMEOUT
+        extension always runs from ``start``, unchanged.
+        """
+        deadline = start + soft_timeout
         while time.monotonic() < deadline:
             with self._lock:
-                if self._scan_seq > scan0 and self._pose_seq > pose0:
-                    return
-            time.sleep(0.02)
+                fresh = (self._scan_seq > scan0
+                         and self._pose_seq > pose0)
+            if fresh and time.monotonic() - start >= C.EXPL_DT:
+                return True
+            time.sleep(0.005)
+
+        # Soft timeout: accept the step when at least one channel moved on
+        # (partially stale observation — still real sensor data), otherwise
+        # grant the hard-extension window before declaring the sim dead.
+        with self._lock:
+            progressed = (self._scan_seq > scan0
+                          or self._pose_seq > pose0)
+        if progressed:
+            self._accept_stale_step(soft_timeout)
+            return True
+        hard_deadline = start + C.EXPL_SENSOR_HARD_TIMEOUT
+        while time.monotonic() < hard_deadline:
+            with self._lock:
+                fresh = (self._scan_seq > scan0
+                         and self._pose_seq > pose0)
+                partial = (self._scan_seq > scan0
+                           or self._pose_seq > pose0)
+            if fresh and time.monotonic() - start >= C.EXPL_DT:
+                return True
+            if partial:
+                self._accept_stale_step(soft_timeout)
+                return True
+            time.sleep(0.05)
+        self._stale_steps += 1
+        self._stop_wheels()
         raise RuntimeError(
-            f"No fresh /scan{self.robot_id} + pose within {timeout}s. "
-            "Is Gazebo running (unpaused) and spawn_robot_explore.sh active?")
+            f"robot_{self.robot_id}: no fresh scan+pose within "
+            f"{soft_timeout}s; stopped instead of training on stale sensors")
 
     def _wait_fresh_step(self, timeout: Optional[float] = None) -> None:
         """Wait for a NEW scan+pose pair, at least ``C.EXPL_DT`` wall time.
@@ -859,32 +968,94 @@ class GazeboExploreEnv(gym.Env):
         Gazebo's low real-time factor means the 10 Hz publishers lag the
         wall clock; a fixed sleep would consume stale sensor data. This
         polls for genuinely new data (seq-based) instead, but never waits
-        longer than ``timeout``. A timeout stops this robot and aborts the
-        step so stale observations never enter the replay buffer.
+        longer than ``timeout``.
+
+        v14 stale tolerance: the soft timeout (EXPL_SENSOR_TIMEOUT) no
+        longer kills the trainer. 13 robots on one weak host regularly
+        stretch sensor delivery past it while the simulator is still
+        alive, and raising here was the dominant restart cause (481
+        restarts / 10.4 h). A wait that ends with SOME new sensor traffic
+        is accepted as a degraded step; only EXPL_SENSOR_HARD_TIMEOUT of
+        TOTAL silence — no scan AND no pose at all — still aborts, because
+        that means the bridge or the simulator is dead, not merely slow.
+
+        Fleet barrier (ConcurrentVecEnv): the vec-env already performed
+        this wait ONCE per step via ``wait_fresh_barrier`` right after the
+        send phase, so with a latched baseline this only consumes it
+        (``_barrier_ok``) or re-raises a terminally failed barrier
+        (``_barrier_dead``) instead of paying the same wait twice.
         """
         timeout = (C.EXPL_SENSOR_TIMEOUT if timeout is None
                    else float(timeout))
         if self._send_seq0 is not None:
+            if self._barrier_dead:
+                # The fleet barrier already failed for this baseline; raise
+                # through the same message instead of waiting the window
+                # again (the barrier's raise path already stopped the wheels
+                # and counted the stale step).
+                self._barrier_dead = False
+                raise RuntimeError(
+                    f"robot_{self.robot_id}: no fresh scan+pose within "
+                    f"{C.EXPL_SENSOR_TIMEOUT}s; stopped instead of training "
+                    "on stale sensors")
             scan0, pose0 = self._send_seq0
             start = self._send_t
-            self._send_seq0 = None
-        else:
-            with self._lock:
-                scan0, pose0 = self._scan_seq, self._pose_seq
-            start = time.monotonic()
-        deadline = start + timeout
-        while time.monotonic() < deadline:
-            with self._lock:
-                fresh = (self._scan_seq > scan0
-                         and self._pose_seq > pose0)
-            if fresh and time.monotonic() - start >= C.EXPL_DT:
+            if self._barrier_ok:
+                # The fleet-wide barrier already waited for this data; consume
+                # the baseline and return instead of paying the wait twice.
+                self._send_seq0 = None
+                self._barrier_ok = False
                 return
-            time.sleep(0.005)
+            self._send_seq0 = None
+            self._barrier_ok = False
+            self._wait_fresh_core(scan0, pose0, start, soft_timeout=timeout)
+            return
+        with self._lock:
+            scan0, pose0 = self._scan_seq, self._pose_seq
+        start = time.monotonic()
+        self._wait_fresh_core(scan0, pose0, start, soft_timeout=timeout)
+
+    def wait_fresh_barrier(self) -> None:
+        """Wait ONCE for this robot's post-send sensor data, fleet-wide.
+
+        ConcurrentVecEnv calls this for every robot right after pre_send, so
+        the N sequential per-env waits inside step() collapse into one
+        parallel wait: all 13 lidar renders complete inside the same scan
+        window instead of staggering across N of them. ``_send_seq0`` is left
+        in place; the paired step() consumes it instantly via _barrier_ok.
+        """
+        if self._send_seq0 is None:
+            return
+        scan0, pose0 = self._send_seq0
+        start = self._send_t
+        self._barrier_ok = False
+        self._barrier_dead = False
+        try:
+            self._barrier_ok = self._wait_fresh_core(scan0, pose0, start)
+        except RuntimeError:
+            # Dead transport: mark the paired step() so it re-raises instead
+            # of waiting the full hard timeout a second time, and stop this
+            # robot's wheels here (the core's raise path already stopped
+            # them once and counted the stale step).
+            self._barrier_dead = True
+            self._stop_wheels()
+            raise
+
+    def _accept_stale_step(self, waited: float) -> None:
+        """Accept this step on partially stale sensor data (soft timeout).
+
+        The step is counted in ``_stale_steps`` and warned at most once per
+        30 s per robot: at 10 Hz a sustained slow burst trips this every
+        control step, and an unthrottled warn would flood the shared
+        13-robot log far more than the occasional stale observation hurts.
+        """
         self._stale_steps += 1
-        self._stop_wheels()
-        raise RuntimeError(
-            f"robot_{self.robot_id}: no fresh scan+pose within {timeout}s; "
-            "stopped instead of training on stale sensors")
+        now = time.monotonic()
+        if now - self._last_stale_warn >= 30.0:
+            self._last_stale_warn = now
+            self.node.get_logger().warn(
+                f"robot_{self.robot_id}: stale sensor step accepted after "
+                f"{waited:.1f}s wait")
 
     def _snapshot(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
         with self._lock:
@@ -1029,12 +1200,26 @@ class GazeboExploreEnv(gym.Env):
         msg.data = grid.flatten().tolist()
         self._map_pub.publish(msg)
 
-    def _save_map(self) -> None:
+    def _save_map(self, success: bool) -> None:
         try:
             C.EXPL_MAP_DIR.mkdir(parents=True, exist_ok=True)
-            stem = f"ep_{self._ep_idx:04d}_{self._maze_name}"
-            self._mapper.save_png(C.EXPL_MAP_DIR / f"{stem}.png")
+            # Disk guard (config.EXPL_MAP_SAVE_EVERY / EXPL_MAP_KEEP): a
+            # per-episode PNG for EVERY terminal episode ballooned
+            # explore_maps/ into thousands of files within a 2-day campaign.
+            # Failures dump only every Nth episode; map_latest.png is always
+            # rewritten (one fixed file, cheap) so the freshest map survives.
+            if success or self._ep_idx % C.EXPL_MAP_SAVE_EVERY == 0:
+                stem = f"ep_{self._ep_idx:04d}_{self._maze_name}"
+                self._mapper.save_png(C.EXPL_MAP_DIR / f"{stem}.png")
             self._mapper.save_png(C.EXPL_MAP_DIR / "map_latest.png")
+            # Prune episode dumps to the newest EXPL_MAP_KEEP files (mtime
+            # order == write order here). Inside the same try/except: a
+            # unlink race with the operator's cleanup must not kill
+            # training either.
+            dumps = sorted(C.EXPL_MAP_DIR.glob("ep_*.png"),
+                           key=lambda p: p.stat().st_mtime)
+            for stale in dumps[:max(0, len(dumps) - C.EXPL_MAP_KEEP)]:
+                stale.unlink()
         except Exception as exc:  # map saving must never kill training
             self.node.get_logger().warn(f"map save failed: {exc}")
 
@@ -1046,6 +1231,8 @@ class GazeboExploreEnv(gym.Env):
         super().reset(seed=seed)
         self._pending_action = None
         self._send_seq0 = None
+        self._barrier_ok = False
+        self._barrier_dead = False
         if seed is not None:
             self._rng = random.Random(seed)
 
@@ -1062,6 +1249,10 @@ class GazeboExploreEnv(gym.Env):
                 self._maze_names, self._maze_cursor, self._rng,
                 self._selection)
             self._set_maze(name)
+
+        # The curriculum threshold is resolved AFTER the maze is chosen so
+        # each maze carries its own promotion level into this episode.
+        self._cur_exit_zones = self._threshold_for(self._maze_name)
 
         # Verify the teleport actually took. `set_pose` reports success on
         # ACCEPTING the request, so a hung server answers OK and never moves
@@ -1137,7 +1328,8 @@ class GazeboExploreEnv(gym.Env):
         speed = math.dist(xy, self._prev_xy) / C.EXPL_DT
 
         # 2D map update (the maze walls are the mapped obstacles)
-        self._mapper.update(xy[0], xy[1], yaw, scan,
+        self._mapper.update(xy[0] + C.LIDAR_X_OFF * math.cos(yaw),
+                            xy[1] + C.LIDAR_X_OFF * math.sin(yaw), yaw, scan,
                             self._ray_angles_or_default())
 
         ray_angles = self._ray_angles_or_default()
@@ -1172,7 +1364,12 @@ class GazeboExploreEnv(gym.Env):
         reward = C.EXPL_R_TIME
         terminated = False
 
-        if exited and self._phase == PHASE_EXPLORE:
+        # Safety takes precedence even when the center crossed the exit.
+        if collided:
+            reward += C.EXPL_R_COLLISION
+            terminated = True
+            info["collision"] = True
+        elif exited and self._phase == PHASE_EXPLORE:
             reward += C.EXPL_R_EXIT_EARLY
             terminated = True
             info["early_exit"] = True
@@ -1180,21 +1377,35 @@ class GazeboExploreEnv(gym.Env):
             reward += C.EXPL_R_EXIT
             terminated = True
             info["success"] = True
+            # v14 exit curriculum: only 2 consecutive solves of the SAME
+            # maze raise its threshold, so the exit leg is reinforced at a
+            # level the policy has already proven; promotion is capped at
+            # the legacy full-coverage contract.
+            self._success_streak[self._maze_name] = (
+                self._success_streak.get(self._maze_name, 0) + 1)
+            if self._success_streak[self._maze_name] >= 2:
+                cur = self._exit_thresholds.get(self._maze_name,
+                                                self._exit_min_zones)
+                new = min(C.EXPL_EXIT_CURRICULUM_MAX,
+                          cur + C.EXPL_EXIT_CURRICULUM_STEP)
+                if new > cur:
+                    self._exit_thresholds[self._maze_name] = new
+                    print(f"[curriculum] {self._maze_name}: exit_min_zones "
+                          f"{cur} -> {new} (2 consecutive successes)",
+                          flush=True)
+                self._success_streak[self._maze_name] = 0
         elif out_of_bounds:
             # Sealed borders make this unreachable except via the gap;
             # treat as a failure (defensive, mirrors v3).
             reward += C.EXPL_R_COLLISION
             terminated = True
             info["out_of_bounds"] = True
-        elif collided:
-            reward += C.EXPL_R_COLLISION
-            terminated = True
-            info["collision"] = True
         else:
             # Coverage bonus (tracker returns the bonus for a brand-new zone)
             if self._zone.update(xy) > 0.0:
                 reward += C.EXPL_R_CELL
-                if (self._zone.n_cells >= self._zone.n_zones
+                if (explore_complete(self._zone.n_cells,
+                                     self._cur_exit_zones)
                         and self._phase == PHASE_EXPLORE):
                     self._phase = PHASE_EXIT
                     self._exit_entered_at = self._step_count
@@ -1293,7 +1504,12 @@ class GazeboExploreEnv(gym.Env):
         self._prev_xy = xy
         if terminated or truncated:
             self._stop_wheels()
-            self._save_map()
+            if not info.get("success", False):
+                # Any non-success terminal breaks the streak: promotion
+                # requires back-to-back solves, so one lucky episode cannot
+                # raise the bar on a maze the policy cannot solve reliably.
+                self._success_streak[self._maze_name] = 0
+            self._save_map(bool(info.get("success", False)))
         return obs, float(reward), terminated, truncated, info
 
     def scripted_action(self) -> np.ndarray:
@@ -1323,7 +1539,16 @@ class GazeboExploreEnv(gym.Env):
 
     def close(self) -> None:
         try:
-            self._stop_wheels()
+            # rclpy may already be shutting down when the supervisor sends a
+            # controlled interrupt or when Gazebo/ROS disappears first. A
+            # final zero-wheel publish is best effort; it must not turn a
+            # saved checkpoint into a crash-looping trainer restart.
+            if rclpy.ok():
+                try:
+                    self._stop_wheels()
+                except Exception as exc:
+                    self.node.get_logger().debug(
+                        f"wheel stop skipped during ROS shutdown: {exc}")
         finally:
             self.executor.shutdown()
             self.node.destroy_node()
@@ -1336,10 +1561,13 @@ def make_explore_env(robot_id: int = 1, seed: Optional[int] = None,
                      prebuild: bool = False,
                      stall_limit: Optional[int] = None,
                      roam_bonus: Optional[float] = None,
-                     action_mode: Optional[str] = None) -> GazeboExploreEnv:
+                     action_mode: Optional[str] = None,
+                     exit_min_zones: Optional[int] = None
+                     ) -> GazeboExploreEnv:
     """Factory shared by training and evaluation scripts."""
     return GazeboExploreEnv(robot_id=robot_id, seed=seed,
                             maze_names=maze_names, selection=selection,
                             world_name=world_name, prebuild=prebuild,
                             stall_limit=stall_limit, roam_bonus=roam_bonus,
-                            action_mode=action_mode)
+                            action_mode=action_mode,
+                            exit_min_zones=exit_min_zones)

@@ -307,9 +307,27 @@ EXPL_WORLD_NAME = "nhom8_maze75"
 
 # Robot control (same mecanum robot as v3: 2-DOF differential drive)
 EXPL_W_MAX      = 20.0        # rad/s per wheel (rim ≈ 0.48 m/s; +33%)
-EXPL_DT         = 0.10        # control period (s), 10 Hz lidar
+EXPL_DT         = 0.20        # control period (s) = scan cycle of the 13-robot
+                              # fleet with 5 Hz lidars; every derived quantity
+                              # (speed = dist/EXPL_DT, shield lookahead horizon,
+                              # stuck window, EXPL_MAX_STEPS wall time) derives
+                              # from EXPL_DT so semantics stay consistent.
 EXPL_SENSOR_TIMEOUT = 5.0     # tolerate low-RTF 13-robot Gazebo sensor bursts
-EXPL_SETTLE_SEC = 0.6
+EXPL_SENSOR_HARD_TIMEOUT = 15.0  # no sensor data AT ALL for this long = sim dead;
+                                 # partial staleness below EXPL_SENSOR_TIMEOUT only
+                                 # degrades the step (see _wait_fresh_step)
+EXPL_SETTLE_SEC = 0.3     # pose publisher is 10 Hz → 3 ticks confirm a
+                          # teleport; 0.6 s made resets ~1.3 s and resets
+                          # dominate wall time while early-episode deaths
+                          # are dense, so trim to ~1.0 s per reset.
+
+# ── Disk guard: map PNG dumps ────────────────────────────────────────────
+# Every terminal episode used to save ep_XXXX_<maze>.png (+ map_latest.png);
+# at ~260 episodes/hour a 2-day campaign writes ~12k files. Save a per-
+# episode map only every Nth episode (successes always save) and prune the
+# directory to the newest KEEP files.
+EXPL_MAP_SAVE_EVERY = 10
+EXPL_MAP_KEEP       = 400
 
 # ── Teleport verification ────────────────────────────────────────────────
 # Reset teleports the robot to its maze start via the Gazebo `set_pose`
@@ -329,7 +347,8 @@ EXPL_SETTLE_SEC = 0.6
 # nearest wrong answer.
 EXPL_TELEPORT_TOL   = 0.25    # m; |observed - requested| accepted as arrival
 EXPL_TELEPORT_TRIES = 3       # attempts before declaring the simulator dead
-EXPL_MAX_STEPS  = 1500        # 150 s: full coverage (~35 m) + exit leg
+EXPL_MAX_STEPS  = 1500        # 300 s wall (13-robot fleet: control 0.2 s):
+                              # full coverage (~35 m) + exit leg
 # ...except that the budget turned out to be for coverage ALONE. v9 produced
 # the first 25/25 episode (ortho_3, R=+127.99) and it TIMED OUT: exploration
 # used all 1500 steps, so PHASE_EXIT started with nothing left and the robot
@@ -519,6 +538,25 @@ EXPL_TARGET_ENTROPY  = -1.0
 # potential term the exit leg uses, computed on ONE geodesic field per zone
 # (rl_training/zone_field.py) against the nearest UNVISITED zone.
 EXPL_N_ZONES        = 25      # watershed zones per maze (maze_registry raster)
+
+# ── v13: exit-phase curriculum ───────────────────────────────────────────
+# PHASE_EXIT has been entered only a handful of times across ~5000 logged
+# episodes (one success ever), so the +100 exit terminal is effectively
+# unsampled and the exit behaviour is untrained. A lower threshold lets early
+# training actually reach and reinforce the exit leg; the default preserves
+# the legacy "visit all 25 zones" contract exactly.
+EXPL_EXIT_MIN_ZONES = EXPL_N_ZONES
+
+# ── Exit curriculum ──────────────────────────────────────────────────────
+# 0 successes in 31k+ episodes: the +100 exit reward was never sampled
+# because PHASE_EXIT needs `exit_min_zones` visited first. Start the
+# threshold low and raise it only after the maze has been solved twice in
+# a row, so the exit leg is learned while it is reachable and the
+# requirement grows only as fast as the policy proves itself.
+EXPL_EXIT_CURRICULUM       = True
+EXPL_EXIT_CURRICULUM_STEP  = 3    # zones added per 2 consecutive successes
+EXPL_EXIT_CURRICULUM_MAX   = 25   # the legacy full-coverage contract
+
 EXPL_ZONE_FIELD_RES = 0.025   # raster resolution (m) — matches the exit field
 EXPL_ZONE_POT_SCALE = 2.0     # scale · Δ(geodesic dist to nearest unvisited)
 EXPL_ZONE_DESCENT_R = 6       # descent-direction search radius, in cells

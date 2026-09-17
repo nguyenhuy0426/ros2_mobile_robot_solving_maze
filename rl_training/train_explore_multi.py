@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+import torch
 
 try:
     import rclpy  # noqa: F401
@@ -86,10 +87,12 @@ def _partition_mazes(mazes: List[str], n_robots: int) -> List[List[str]]:
 
 def _make_env(robot_id: int, mazes: List[str], seed: int,
               stall_limit: Optional[int] = None,
-              roam_bonus: Optional[float] = None, visit_memory: bool = False):
+              roam_bonus: Optional[float] = None, visit_memory: bool = False,
+              exit_min_zones: Optional[int] = None):
     env = make_explore_env(robot_id=robot_id, maze_names=list(mazes),
                          selection="round_robin", prebuild=True, seed=seed,
-                         stall_limit=stall_limit, roam_bonus=roam_bonus)
+                         stall_limit=stall_limit, roam_bonus=roam_bonus,
+                         exit_min_zones=exit_min_zones)
     return Monitor(VisitMemory(env) if visit_memory else env)
 
 
@@ -256,6 +259,134 @@ class MultiRobotMetricsCallback(BaseCallback):
         self.logger.record("multi/mean_return", ret_sum / total_eps)
 
 
+class FirstSuccessVerifier(BaseCallback):
+    """Deterministic replay of a maze's FIRST solve, to rule out luck.
+
+    The first time any robot solves a maze under the stochastic training
+    policy, the shared policy is re-rolled on that same maze 2-3 times with
+    ``deterministic=True`` actions: a single success can be a lucky fluke,
+    while 2/3 deterministic replays is evidence of a learned behaviour.
+    Each maze is verified once per run; results go to ``verification.json``
+    (atomic write, tmp + os.replace, same style as the elite table) and one
+    row per attempt to ``verification.csv`` in the run's log directory.
+
+    Correctness note: the manual ``env_method`` steps run the verified env
+    ahead of the learn loop, whose ``model._last_obs[i]`` is one step stale
+    by the time control returns, so every verification injects one garbage
+    transition into the replay buffer. Patching SB3 internals to undo that
+    risks corrupting the learn loop for a negligible artifact and is
+    deliberately NOT done.
+    """
+
+    CSV_COLUMNS = ["timesteps", "robot", "maze", "attempt", "success",
+                   "ep_len", "coverage_frac", "verified"]
+
+    ATTEMPTS = 3      # replays demanded before a solve is believed
+    MAX_STEPS = 1600  # safety cap; live episodes usually run 50-300 steps
+
+    def __init__(self, log_dir: Path) -> None:
+        super().__init__()
+        self._log_dir = log_dir
+        self._verified: Dict[str, Dict] = {}  # maze -> replay results
+        self._busy = False                    # guards against recursion
+
+    def _replay_episode(self, robot_idx: int, attempt: int,
+                        maze: str) -> Dict[str, Any]:
+        """One deterministic episode on ``maze`` through the vec env."""
+        te = self.training_env
+        # env_method returns a LIST of per-env results; Monitor.reset
+        # returns (obs, info).
+        res = te.env_method("reset", indices=[robot_idx],
+                            options={"maze_name": maze})
+        obs = np.asarray(res[0][0], dtype=np.float32)
+        success = False
+        cov = 0.0
+        ep_len = 0
+        for ep_len in range(1, self.MAX_STEPS + 1):
+            # Feed the obs as a 1-episode batch so predict() keeps the batch
+            # dimension and act[0] is the action vector.
+            act, _ = self.model.predict(obs[None], deterministic=True)
+            out = te.env_method("step", np.asarray(act[0], dtype=np.float32),
+                                indices=[robot_idx])
+            # Monitor.step returns the gymnasium 5-tuple; obs may arrive as
+            # float64, the policy expects float32.
+            obs, rew, term, trunc, infos = out[0]
+            obs = np.asarray(obs, dtype=np.float32)
+            if term or trunc:
+                success = bool(infos.get("success", False))
+                cov = float(infos.get("coverage_frac", 0.0))
+                break
+        # A run off the step cap counts as a failed replay.
+        return {"attempt": attempt, "success": int(success), "ep_len": ep_len,
+                "coverage_frac": round(cov, 4)}
+
+    def _write_json(self) -> None:
+        path = self._log_dir / "verification.json"
+        payload = {
+            "meta": {"updated_timesteps": self.num_timesteps,
+                     "updated": datetime.now().isoformat()},
+            "mazes": self._verified,
+        }
+        try:
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload, indent=2))
+            os.replace(tmp, path)
+        except Exception as exc:
+            print(f"[verify] WARNING: could not write {path}: {exc}",
+                  flush=True)
+
+    def _verify(self, robot_idx: int, maze: str) -> None:
+        robot = robot_idx + 1
+        replays = [self._replay_episode(robot_idx, a, maze)
+                   for a in range(1, self.ATTEMPTS + 1)]
+        succ = sum(r["success"] for r in replays)
+        ok = succ >= 2  # 2/3 — the bar for "not a lucky solve"
+        self._verified[maze] = {"robot": robot, "replays": replays,
+                                "verified": ok,
+                                "timesteps": self.num_timesteps}
+        self._write_json()
+        path = self._log_dir / "verification.csv"
+        new_file = not path.exists()
+        with path.open("a", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=self.CSV_COLUMNS)
+            if new_file:
+                w.writeheader()
+            for r in replays:
+                w.writerow({"timesteps": self.num_timesteps, "robot": robot,
+                            "maze": maze, **r, "verified": int(ok)})
+        verdict = "VERIFIED (không phải may mắn)" if ok else "NOT VERIFIED"
+        print(f"[verify] maze {maze} robot {robot} replays: "
+              f"{succ}/{self.ATTEMPTS} success -> {verdict}", flush=True)
+
+    def _on_step(self) -> bool:
+        for i, done in enumerate(self.locals["dones"]):
+            if not done:
+                continue
+            info = self.locals["infos"][i]
+            maze = info.get("maze", "?")
+            if (not info.get("success") or maze in self._verified
+                    or self._busy):
+                continue
+            self._busy = True
+            try:
+                try:
+                    self._verify(i, maze)
+                except Exception as exc:
+                    # Verification must never kill training.
+                    print(f"[verify] WARNING: {maze} verification failed: "
+                          f"{exc}", flush=True)
+                # Hand the env back to the training flow: a plain reset (no
+                # options) leaves its round-robin cursor running on.
+                try:
+                    self.training_env.env_method("reset", indices=[i])
+                except Exception as exc:
+                    print(f"[verify] WARNING: restore reset for robot "
+                          f"{i + 1} failed: {exc}", flush=True)
+            finally:
+                self._busy = False
+        return True
+
+
 class EliteCheckpointsCallback(BaseCallback):
     """GA-style per-maze elite snapshots ("hall of fame"), one per maze.
 
@@ -390,6 +521,30 @@ class EliteCheckpointsCallback(BaseCallback):
         return True
 
 
+class EntropyFloorCallback(BaseCallback):
+    """Hard floor on SAC's auto-tuned entropy weight (ent_coef).
+
+    ent_coef = exp(log_ent_coef); without a floor the auto-tune can drag it
+    low enough to determinise the policy and the creep behaviour relapses
+    (handoff 3.4: entropy collapse). Clamping to >= 0.01 every step keeps
+    the policy explorative whatever the temperature loss asks for.
+    """
+
+    def __init__(self, floor: float = 0.01) -> None:
+        super().__init__()
+        self.floor = floor  # hardcoded default; no CLI knob by design
+
+    def _on_step(self) -> bool:
+        try:
+            if (hasattr(self.model, "log_ent_coef")
+                    and self.model.log_ent_coef is not None):
+                with torch.no_grad():
+                    self.model.log_ent_coef.clamp_(min=math.log(self.floor))
+        except Exception as exc:
+            print(f"[entropy-floor] WARNING: clamp failed: {exc}", flush=True)
+        return True
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         description="Multi-robot shared-policy (SAC) explore-then-exit "
@@ -438,6 +593,11 @@ def main() -> None:
                     help="bold-roaming reward scale r += bonus * speed "
                          "(None = config default: "
                          f"{C.EXPL_ROAM_BONUS})")
+    ap.add_argument("--exit-min-zones", type=int, default=None,
+                    help="zone count that triggers PHASE_EXIT (None = config "
+                         f"default: {C.EXPL_EXIT_MIN_ZONES}). Lower values let "
+                         "early training reach and reinforce the exit leg "
+                         "before full-coverage exploration is reliable")
     ap.add_argument("--reset-elites", action="store_true",
                     help="start a fresh elite table (each run already has "
                          "an isolated hall of fame)")
@@ -447,6 +607,9 @@ def main() -> None:
     ap.add_argument("--gradient-steps", type=int, default=1,
                     help="updates per vector step; -1 matches collected "
                          "transitions (13 updates for 13 robots)")
+    ap.add_argument("--buffer-size", type=int, default=None,
+                    help="override replay buffer capacity (transitions); "
+                         "default: config.SACW_BUFFER_SIZE")
     ap.add_argument("--run-dir", type=Path, default=None,
                     help="new directory for this run's logs/checkpoints; "
                          "default: sac_explore_multi_runs/<timestamp-pid>")
@@ -526,6 +689,23 @@ def _bootstrap_scripted(model, env, steps: int) -> int:
 
 
 def _train(args, mazes) -> None:
+    # This process shares a CPU with Gazebo, 13 ROS callback executors and
+    # bridge nodes.  Letting Torch/BLAS use every core creates a thread storm
+    # that lowers simulator RTF and therefore reduces useful env-steps/min.
+    # Keep the default unchanged for standalone users; the supervisor can set
+    # RL_TORCH_THREADS=2 for the mixed simulation workload.
+    raw_threads = os.environ.get("RL_TORCH_THREADS")
+    if raw_threads:
+        threads = max(1, int(raw_threads))
+        torch.set_num_threads(threads)
+        try:
+            torch.set_num_interop_threads(max(1, min(2, threads)))
+        except RuntimeError:
+            # A direct caller may already have launched Torch work; the intra-op
+            # setting is still useful and inter-op is best-effort in that case.
+            pass
+        print(f"Torch CPU threads: intra={threads} "+
+              f"interop={max(1, min(2, threads))}", flush=True)
     groups = _partition_mazes(mazes, args.n_robots)
     run_dir = args.run_dir or (C.WS_ROOT / "sac_explore_multi_runs" /
                               f"{datetime.now():%Y%m%d-%H%M%S}-{os.getpid()}")
@@ -554,7 +734,8 @@ def _train(args, mazes) -> None:
                           seed=args.seed + k,
                           stall_limit=args.stall_limit,
                           roam_bonus=args.roam_bonus,
-                          visit_memory=args.visit_memory)
+                          visit_memory=args.visit_memory,
+                          exit_min_zones=args.exit_min_zones)
         for k, group in enumerate(groups, start=1)])
 
     try:
@@ -588,7 +769,8 @@ def _train(args, mazes) -> None:
         else:
             model = SAC("MlpPolicy", env,
                         learning_rate=C.SACW_LR,
-                        buffer_size=C.SACW_BUFFER_SIZE,
+                        buffer_size=(args.buffer_size if args.buffer_size
+                                     else C.SACW_BUFFER_SIZE),
                         batch_size=C.SACW_BATCH_SIZE,
                         gamma=C.EXPL_GAMMA,
                         tau=C.SACW_TAU,
@@ -618,6 +800,10 @@ def _train(args, mazes) -> None:
             EliteCheckpointsCallback(ckpt_dir=ckpt_dir,
                                      json_path=log_dir / "elites.json",
                                      reset=args.reset_elites),
+            FirstSuccessVerifier(log_dir=log_dir),
+            # Both run on fixed constants (3 replays, 2/3 pass bar, entropy
+            # floor 0.01) — deliberately no CLI knobs.
+            EntropyFloorCallback(),
         ]
 
         try:
