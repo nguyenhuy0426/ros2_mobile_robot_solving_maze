@@ -161,7 +161,12 @@ def filter_command(planner, pose, scan, v, w):
             future = integrate(pose, cv, cw, t)
             if not planner.valid(planner.cell(future[:2])):
                 return False
-            if len(points) and np.min(np.linalg.norm(points - future[:2], axis=1)) <= H.radius:
+            # A pure pivot does not move the conservative circular footprint.
+            # If the robot entered the safety margin because of scan noise or
+            # localization error, rejecting rotation as well as translation
+            # creates an unrecoverable zero-command latch.
+            if (abs(cv) > 1e-8 and len(points)
+                    and np.min(np.linalg.norm(points - future[:2], axis=1)) <= H.radius):
                 return False
         return True
 

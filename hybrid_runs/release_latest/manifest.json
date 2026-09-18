@@ -1,6 +1,6 @@
 {
   "release": "latest",
-  "created": "2026-09-17",
+  "created": "2026-09-18",
   "architecture": "neural local controller + known-map planner + LiDAR scan-matched command odometry + safety filter",
   "scope": "Known-map navigation. This release does not implement online SLAM.",
   "models": {
@@ -29,6 +29,7 @@
     "fixed_gazebo": "13/13 episodes on 12 distinct geometries, zero wall contacts",
     "reload_reliability": "90/90 episodes on 45 generated geometries, each run twice, zero wall contacts",
     "noisy_scan_match_gazebo": "15/15 generated mazes, 1.5 cm LiDAR noise, 5% ray dropout, +3% linear/-3% angular odometry scale, zero wall contacts",
+    "additional_unseen_gazebo": "20/20 additional unseen geometries across 5x5, 6x6, and 7x7 mazes under the same sensor/odometry stress, zero wall contacts and zero geometry collisions",
     "packaged_model_smoke": "promoted local_policy.pt reloaded from release_latest and reached goal with the same sensor/odometry stress, zero wall contacts"
   },
   "limitations": [

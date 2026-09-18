@@ -49,6 +49,13 @@ def test_invalid_lidar_cannot_generate_motion():
         observation(scan, (1., 1., 0.), (1.5, 1.))
 
 
+def test_close_obstacle_vetoes_translation_but_keeps_neural_pivot():
+    planner = GridPlanner(np.zeros((100, 100)), 0.025, (0., 0.))
+    scan = np.full(36, 3.)
+    scan[0] = .08
+    assert filter_command(planner, (1., 1., 0.), scan, .18, .5) == (0., .5, True)
+
+
 def test_pivot_does_not_translate():
     pose = integrate((1., 2., 0.), 0., 1., 0.2)
     assert pose == pytest.approx([1., 2., 0.2])

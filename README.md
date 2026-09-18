@@ -21,7 +21,7 @@ Only the promoted weights and compact validation evidence are stored in
 | `local_policy.pt` | 38 -> 64 -> 64 -> 2 | `987c703af37e394f2886f480eb958a6cd78654a604b946e9966370a871b7cd6a` |
 | `tracking_policy.pt` | 42 -> 96 -> 96 -> 2 | `7a405bc7e6ca3a9f3746c94e55977d624370605a627e638aae21e5eb256750db` |
 
-Validation completed on 2026-09-17:
+Validation completed through 2026-09-18:
 
 - 13/13 fixed-maze Gazebo episodes passed, covering 12 distinct geometries;
 - 90/90 generated-maze episodes passed across 45 distinct geometries, with
@@ -29,8 +29,16 @@ Validation completed on 2026-09-17:
 - 15/15 additional Gazebo stress episodes passed with 1.5 cm Gaussian LiDAR
   noise, 5% ray dropout, +3% linear odometry scale error, -3% angular odometry
   scale error, and up to 0.5 rad initial-yaw variation;
+- 20/20 further unseen generated geometries passed under the same sensor and
+  odometry stress, spanning 5x5, 6x6, and 7x7 mazes with 0.60-0.80 m cells;
 - zero wall contacts and zero geometry collisions were observed in these
   release gates.
+
+The fixed and generated cohorts cover 77 distinct successful geometries in
+total (12 fixed and 65 generated). The 45-geometry reload cohort was run twice;
+the newest 20-geometry cohort used disjoint generation and episode seeds. Its
+largest audited pose error was 0.077 m, and 59 inconsistent scan matches were
+rejected instead of being applied to the controller pose.
 
 These results show repeatability in Gazebo. They do not prove operation in all
 possible mazes or on physical hardware.
@@ -122,7 +130,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q \
   rl_training/tests/test_{command_odometry,holdout_mazes,holdout_reliability,hybrid_multi,hybrid_navigation,oriented_navigation,sigma_se2}.py
 ```
 
-The promoted-release suite contains 51 tests. The complete research suite also
+The promoted-release suite contains 53 tests. The complete research suite also
 contains tests for older SAC, TD3, and exploration experiments and therefore
 requires their optional dependencies.
 
