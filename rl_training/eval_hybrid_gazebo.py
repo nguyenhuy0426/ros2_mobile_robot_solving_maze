@@ -24,7 +24,7 @@ from rl_training.eval_hybrid import maze_setup
 from rl_training.hybrid_navigation import H, LocalPolicy, filter_command, observation
 from rl_training.maze_registry import load_registry
 from rl_training.train_hybrid import teacher
-from rl_training.holdout_mazes import generate_holdout
+from rl_training.holdout_mazes import generate_hex_holdout, generate_holdout
 from rl_training.oriented_navigation import (OrientedRoute, filter_rectangular, TrackingPolicy,
                                               tracking_observation, tracking_teacher)
 
@@ -129,6 +129,8 @@ def main():
     p.add_argument("--maze", default="delta_1")
     p.add_argument("--holdout-seed", type=int,
                    help="generate a deterministic maze excluded from the training registry")
+    p.add_argument("--hex-holdout-seed", type=int,
+                   help="generate a deterministic hexagonal-cell maze")
     p.add_argument("--holdout-size", type=int, default=5)
     p.add_argument("--holdout-cell", type=float, default=.75)
     p.add_argument("--model", default="hybrid_runs/release_latest/local_policy.pt")
@@ -158,6 +160,8 @@ def main():
     p.add_argument("--keep-open", type=float, default=0.,
                    help="seconds to keep Gazebo visible after the run finishes")
     args = p.parse_args()
+    if args.holdout_seed is not None and args.hex_holdout_seed is not None:
+        p.error("choose either --holdout-seed or --hex-holdout-seed")
     if not 0 <= args.expert_prob <= 1 or (args.expert_prob and not args.collect_data):
         p.error("expert-prob requires collect-data and must be in [0, 1]")
     if (not 0 <= args.domain_id <= 200 or args.yaw_jitter < 0 or
@@ -180,8 +184,15 @@ def main():
 
     out = Path(args.output).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    spec = (generate_holdout(args.holdout_seed, args.holdout_size, args.holdout_cell)
-            if args.holdout_seed is not None else load_registry()[args.maze])
+    generated = args.holdout_seed is not None or args.hex_holdout_seed is not None
+    if args.hex_holdout_seed is not None:
+        spec = generate_hex_holdout(args.hex_holdout_seed, args.holdout_size,
+                                    args.holdout_cell)
+    elif args.holdout_seed is not None:
+        spec = generate_holdout(args.holdout_seed, args.holdout_size,
+                                args.holdout_cell)
+    else:
+        spec = load_registry()[args.maze]
     args.maze = spec.name
     planner, geometry, goal = maze_setup(spec)
     path = planner.plan(spec.start_xy_local, goal)
@@ -239,7 +250,7 @@ def main():
         if not path and not oriented:
             raise RuntimeError("no_safe_path: footprint planning gate failed")
         world_name = f"nhom8_maze_{args.maze}"
-        if args.holdout_seed is None:
+        if not generated:
             world = ET.parse(C.WS_ROOT / "worlds" / f"{world_name}.sdf")
         else:
             from scripts.generate_maze_sdf_multi import build_standalone_text

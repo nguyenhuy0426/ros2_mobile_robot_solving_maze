@@ -76,3 +76,85 @@ def generate_holdout(seed, size=5, cell=0.75):
                     zone_res=1., zone_labels=labels, zone_centroids_local=((0., 0.),),
                     zone_start=0, placement_offset=tuple(C.MAZE_CENTER_XY))
     return spec
+
+
+def generate_hex_holdout(seed, diameter=7, side=0.65):
+    """Generate a perfect maze on a regular hexagonal tiling.
+
+    ``diameter`` is the number of cells across opposite corners and must be an
+    odd number. A diameter of seven contains 37 hexagonal cells.
+    """
+    if diameter < 3 or diameter % 2 == 0:
+        raise ValueError("hex holdout diameter must be an odd number >= 3")
+    if side <= 0:
+        raise ValueError("hex holdout side must be positive")
+    radius = diameter // 2
+    cells = {(q, r) for q in range(-radius, radius + 1)
+             for r in range(-radius, radius + 1)
+             if abs(q + r) <= radius}
+    directions = (
+        ((1, 0), math.pi / 6), ((1, -1), -math.pi / 6),
+        ((0, -1), -math.pi / 2), ((-1, 0), -5 * math.pi / 6),
+        ((-1, 1), 5 * math.pi / 6), ((0, 1), math.pi / 2),
+    )
+
+    def center(cell):
+        q, r = cell
+        return np.array((1.5 * side * q,
+                         math.sqrt(3) * side * (r + q / 2)), dtype=float)
+
+    rng = np.random.default_rng(seed)
+    top = [c for c in cells if (c[0], c[1] + 1) not in cells]
+    bottom = [c for c in cells if (c[0], c[1] - 1) not in cells]
+    start = top[int(rng.integers(len(top)))]
+    exit_cell = bottom[int(rng.integers(len(bottom)))]
+
+    visited, stack, open_edges = {start}, [start], set()
+    while stack:
+        current = stack[-1]
+        candidates = []
+        for (dq, dr), _ in directions:
+            nxt = (current[0] + dq, current[1] + dr)
+            if nxt in cells and nxt not in visited:
+                candidates.append(nxt)
+        if not candidates:
+            stack.pop()
+            continue
+        nxt = candidates[int(rng.integers(len(candidates)))]
+        open_edges.add(frozenset((current, nxt)))
+        visited.add(nxt)
+        stack.append(nxt)
+
+    thickness = C.EXPL_WALL_T
+    apothem = math.sqrt(3) * side / 2
+    walls = []
+    for cell in sorted(cells):
+        cxy = center(cell)
+        for (dq, dr), normal in directions:
+            nxt = (cell[0] + dq, cell[1] + dr)
+            if nxt in cells:
+                if cell > nxt or frozenset((cell, nxt)) in open_edges:
+                    continue
+            elif cell == exit_cell and (dq, dr) == (0, -1):
+                continue
+            midpoint = cxy + apothem * np.array((math.cos(normal), math.sin(normal)))
+            walls.append(Wall(float(midpoint[0]), float(midpoint[1]),
+                              side / 2 + thickness, thickness / 2,
+                              normal + math.pi / 2))
+
+    all_centers = np.asarray([center(c) for c in cells])
+    margin = side + .4
+    x0, y0 = all_centers.min(axis=0) - margin
+    x1, y1 = all_centers.max(axis=0) + margin
+    exit_xy = center(exit_cell) + np.array((0., -apothem))
+    labels = np.zeros((2, 2), dtype=np.int16)
+    return MazeSpec(
+        name=f"hexagon_{diameter}x{diameter}_{round(side * 100):02d}cm_{seed}",
+        family="hex_holdout", walls_local=tuple(walls),
+        wall_bbox=(float(x0 + .4), float(y0 + .4),
+                   float(x1 - .4), float(y1 - .4)),
+        bounds=(float(x0), float(y0), float(x1), float(y1)),
+        openings=(Opening("exit", tuple(exit_xy), "south", side / 2),),
+        start_xy_local=tuple(center(start)), start_yaw=-math.pi / 2,
+        zone_res=1., zone_labels=labels, zone_centroids_local=((0., 0.),),
+        zone_start=0, placement_offset=tuple(C.MAZE_CENTER_XY))

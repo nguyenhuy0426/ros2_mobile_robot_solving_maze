@@ -30,6 +30,7 @@
     "reload_reliability": "90/90 episodes on 45 generated geometries, each run twice, zero wall contacts",
     "noisy_scan_match_gazebo": "15/15 generated mazes, 1.5 cm LiDAR noise, 5% ray dropout, +3% linear/-3% angular odometry scale, zero wall contacts",
     "additional_unseen_gazebo": "20/20 additional unseen geometries across 5x5, 6x6, and 7x7 mazes under the same sensor/odometry stress, zero wall contacts and zero geometry collisions",
+    "hexagon_7x7_gazebo": "1/1 unseen regular hexagonal 7x7 maze (37 cells) reached the goal with frozen weights and LiDAR scan matching, zero wall contacts",
     "packaged_model_smoke": "promoted local_policy.pt reloaded from release_latest and reached goal with the same sensor/odometry stress, zero wall contacts"
   },
   "limitations": [

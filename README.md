@@ -31,11 +31,14 @@ Validation completed through 2026-09-18:
   scale error, and up to 0.5 rad initial-yaw variation;
 - 20/20 further unseen generated geometries passed under the same sensor and
   odometry stress, spanning 5x5, 6x6, and 7x7 mazes with 0.60-0.80 m cells;
+- 1/1 regular hexagonal 7x7 maze passed using the frozen local-policy weight,
+  LiDAR scan matching, and live Gazebo contact auditing;
 - zero wall contacts and zero geometry collisions were observed in these
   release gates.
 
-The fixed and generated cohorts cover 77 distinct successful geometries in
-total (12 fixed and 65 generated). The 45-geometry reload cohort was run twice;
+The fixed and generated cohorts cover 78 distinct successful geometries in
+total (12 fixed, 65 square-grid generated, and one hexagonal-grid maze). The
+45-geometry reload cohort was run twice;
 the newest 20-geometry cohort used disjoint generation and episode seeds. Its
 largest audited pose error was 0.077 m, and 59 inconsistent scan matches were
 rejected instead of being applied to the controller pose.
@@ -102,6 +105,23 @@ source /opt/ros/jazzy/setup.bash
 Maze generation and episode randomness use separate seeds. Use `--repeats` and
 `--episode-seed-offset` to rerun the same geometry independently.
 
+## Run the hexagonal 7x7 Gazebo maze
+
+```bash
+source /opt/ros/jazzy/setup.bash
+.venv/bin/python -m rl_training.eval_hybrid_gazebo \
+  --hex-holdout-seed 57004 \
+  --holdout-size 7 \
+  --holdout-cell 0.65 \
+  --localization scan_match \
+  --gui \
+  --keep-open 30 \
+  --output hybrid_runs/evaluations/hexagon_7x7_live
+```
+
+This is a regular hexagonal tiling with seven cells across and 37 cells in
+total. It is generated from its seed and is not part of the training registry.
+
 ## Train and promote a candidate
 
 `train_hybrid_multi.py` runs up to four isolated Gazebo workers, collects DAgger
@@ -130,7 +150,7 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/pytest -q \
   rl_training/tests/test_{command_odometry,holdout_mazes,holdout_reliability,hybrid_multi,hybrid_navigation,oriented_navigation,sigma_se2}.py
 ```
 
-The promoted-release suite contains 53 tests. The complete research suite also
+The promoted-release suite contains 54 tests. The complete research suite also
 contains tests for older SAC, TD3, and exploration experiments and therefore
 requires their optional dependencies.
 

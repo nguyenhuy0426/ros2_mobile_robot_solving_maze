@@ -1,9 +1,12 @@
 import hashlib
 import json
+import math
+
+import numpy as np
 
 from rl_training.eval_hybrid import maze_setup
 from rl_training.eval_holdouts_gazebo import build_episode_jobs
-from rl_training.holdout_mazes import generate_holdout
+from rl_training.holdout_mazes import generate_hex_holdout, generate_holdout
 
 
 def fingerprint(spec):
@@ -38,6 +41,20 @@ def test_larger_and_narrower_holdouts_have_distinct_names_and_safe_routes():
         planner, _, goal = maze_setup(spec)
         assert planner.plan(spec.start_xy_local, goal)
     assert len(names) == len(cases)
+
+
+def test_hexagonal_holdout_is_deterministic_and_plannable():
+    a = generate_hex_holdout(57001, diameter=7, side=.65)
+    b = generate_hex_holdout(57001, diameter=7, side=.65)
+    assert fingerprint(a) == fingerprint(b)
+    assert a.start_xy_local == b.start_xy_local
+    assert a.exit_opening == b.exit_opening
+    assert a.family == "hex_holdout"
+    assert len(a.walls_local) > 0
+    assert any(abs(w.yaw) % (math.pi / 2) > .1 for w in a.walls_local)
+    planner, geometry, goal = maze_setup(a)
+    assert planner.plan(a.start_xy_local, goal)
+    assert not geometry.collides(np.array([*a.start_xy_local, a.start_yaw]))
 
 
 def test_repeat_jobs_keep_geometry_seed_and_change_episode_seed():
